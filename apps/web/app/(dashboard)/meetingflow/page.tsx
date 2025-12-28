@@ -1,6 +1,53 @@
-import Link from "next/link";
+"use client";
+
+import { useState, useMemo } from "react";
+
+type MeetingStatus = "all" | "pending_review" | "transcribing" | "completed";
+type ProjectFilter = "" | "acme" | "sunset" | "downtown";
 
 export default function MeetingFlowPage() {
+  const [statusFilter, setStatusFilter] = useState<MeetingStatus>("all");
+  const [projectFilter, setProjectFilter] = useState<ProjectFilter>("");
+
+  const filteredMeetings = useMemo(() => {
+    return mockMeetings.filter((meeting) => {
+      // Status filter
+      if (statusFilter !== "all" && meeting.status !== statusFilter) {
+        return false;
+      }
+      // Project filter
+      if (projectFilter) {
+        const projectMap: Record<string, string[]> = {
+          acme: ["Acme Office Build"],
+          sunset: ["Sunset Apartments"],
+          downtown: ["Downtown Plaza"],
+        };
+        if (!projectMap[projectFilter]?.includes(meeting.project || "")) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [statusFilter, projectFilter]);
+
+  // Calculate stats based on all meetings (not filtered)
+  const stats = useMemo(() => {
+    const totalMeetings = mockMeetings.length;
+    const pendingReview = mockMeetings.filter(m => m.status === "pending_review").length;
+    const totalHours = mockMeetings.reduce((acc, m) => {
+      const match = m.duration.match(/(\d+)h?\s*(\d+)?/);
+      if (match) {
+        const hours = match[1].includes("h") ? parseInt(match[1]) : 0;
+        const mins = match[2] ? parseInt(match[2]) : parseInt(match[1]);
+        return acc + hours + mins / 60;
+      }
+      return acc;
+    }, 0);
+    const actionItems = mockMeetings.reduce((acc, m) => acc + (m.actionItems || 0), 0);
+    
+    return { totalMeetings, pendingReview, totalHours: totalHours.toFixed(1), actionItems };
+  }, []);
+
   return (
     <div className="p-6 space-y-6">
       {/* Page header */}
@@ -25,51 +72,125 @@ export default function MeetingFlowPage() {
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
         <div className="card p-4">
           <p className="text-sm text-slate-400">Total Meetings</p>
-          <p className="text-2xl font-bold">24</p>
+          <p className="text-2xl font-bold">{stats.totalMeetings}</p>
         </div>
         <div className="card p-4">
           <p className="text-sm text-slate-400">Pending Review</p>
-          <p className="text-2xl font-bold text-amber-400">3</p>
+          <p className="text-2xl font-bold text-amber-400">{stats.pendingReview}</p>
         </div>
         <div className="card p-4">
           <p className="text-sm text-slate-400">Hours Transcribed</p>
-          <p className="text-2xl font-bold">18.5</p>
+          <p className="text-2xl font-bold">{stats.totalHours}</p>
         </div>
         <div className="card p-4">
           <p className="text-sm text-slate-400">Action Items Created</p>
-          <p className="text-2xl font-bold text-emerald-400">47</p>
+          <p className="text-2xl font-bold text-emerald-400">{stats.actionItems}</p>
         </div>
       </div>
 
       {/* Filters */}
       <div className="flex items-center gap-3 flex-wrap">
         <div className="flex items-center gap-2 border border-slate-700 rounded-lg p-1">
-          <FilterButton active>All</FilterButton>
-          <FilterButton>Pending Review</FilterButton>
-          <FilterButton>Transcribing</FilterButton>
-          <FilterButton>Completed</FilterButton>
+          <FilterButton 
+            active={statusFilter === "all"} 
+            onClick={() => setStatusFilter("all")}
+          >
+            All
+          </FilterButton>
+          <FilterButton 
+            active={statusFilter === "pending_review"} 
+            onClick={() => setStatusFilter("pending_review")}
+          >
+            Pending Review
+          </FilterButton>
+          <FilterButton 
+            active={statusFilter === "transcribing"} 
+            onClick={() => setStatusFilter("transcribing")}
+          >
+            Transcribing
+          </FilterButton>
+          <FilterButton 
+            active={statusFilter === "completed"} 
+            onClick={() => setStatusFilter("completed")}
+          >
+            Completed
+          </FilterButton>
         </div>
-        <select className="input w-auto text-sm">
+        <select 
+          className="input w-auto text-sm"
+          value={projectFilter}
+          onChange={(e) => setProjectFilter(e.target.value as ProjectFilter)}
+        >
           <option value="">All Projects</option>
           <option value="acme">Acme Office Build</option>
           <option value="sunset">Sunset Apartments</option>
+          <option value="downtown">Downtown Plaza</option>
         </select>
+        
+        {/* Clear filters button */}
+        {(statusFilter !== "all" || projectFilter) && (
+          <button 
+            className="text-sm text-slate-400 hover:text-white transition-colors"
+            onClick={() => {
+              setStatusFilter("all");
+              setProjectFilter("");
+            }}
+          >
+            Clear filters
+          </button>
+        )}
+      </div>
+
+      {/* Results count */}
+      <div className="text-sm text-slate-400">
+        Showing {filteredMeetings.length} of {mockMeetings.length} meetings
       </div>
 
       {/* Meetings list */}
       <div className="space-y-4">
-        {mockMeetings.map((meeting) => (
+        {filteredMeetings.map((meeting) => (
           <MeetingCard key={meeting.id} meeting={meeting} />
         ))}
       </div>
+
+      {/* Empty state when no results */}
+      {filteredMeetings.length === 0 && mockMeetings.length > 0 && (
+        <div className="card p-12 text-center">
+          <div className="h-16 w-16 rounded-2xl bg-slate-800 flex items-center justify-center mx-auto mb-4">
+            <SearchIcon className="h-8 w-8 text-slate-500" />
+          </div>
+          <h3 className="text-lg font-medium mb-2">No matching meetings</h3>
+          <p className="text-slate-400 mb-6 max-w-sm mx-auto">
+            Try adjusting your filters to find what you&apos;re looking for
+          </p>
+          <button 
+            className="btn-secondary"
+            onClick={() => {
+              setStatusFilter("all");
+              setProjectFilter("");
+            }}
+          >
+            Clear all filters
+          </button>
+        </div>
+      )}
     </div>
   );
 }
 
 // Components
-function FilterButton({ children, active }: { children: React.ReactNode; active?: boolean }) {
+function FilterButton({ 
+  children, 
+  active, 
+  onClick 
+}: { 
+  children: React.ReactNode; 
+  active?: boolean;
+  onClick?: () => void;
+}) {
   return (
     <button
+      onClick={onClick}
       className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
         active
           ? "bg-slate-700 text-white"
@@ -250,6 +371,14 @@ function DotsIcon({ className }: { className?: string }) {
   );
 }
 
+function SearchIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+    </svg>
+  );
+}
+
 // Mock data
 const mockMeetings = [
   {
@@ -264,6 +393,7 @@ const mockMeetings = [
     actionItems: 5,
     iconBg: "bg-amber-500/10",
     iconColor: "text-amber-400",
+    progress: undefined,
   },
   {
     id: "2",
@@ -276,6 +406,8 @@ const mockMeetings = [
     progress: 67,
     iconBg: "bg-cyan-500/10",
     iconColor: "text-cyan-400",
+    summary: undefined,
+    actionItems: undefined,
   },
   {
     id: "3",
@@ -289,6 +421,7 @@ const mockMeetings = [
     actionItems: 8,
     iconBg: "bg-emerald-500/10",
     iconColor: "text-emerald-400",
+    progress: undefined,
   },
   {
     id: "4",
@@ -302,6 +435,6 @@ const mockMeetings = [
     actionItems: 3,
     iconBg: "bg-violet-500/10",
     iconColor: "text-violet-400",
+    progress: undefined,
   },
 ];
-

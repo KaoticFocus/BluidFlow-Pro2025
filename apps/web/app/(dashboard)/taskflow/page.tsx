@@ -1,6 +1,35 @@
+"use client";
+
 import Link from "next/link";
+import { useState, useMemo } from "react";
+
+type TaskStatus = "all" | "open" | "in_progress" | "completed";
+type TaskSource = "" | "voice" | "photo" | "message" | "manual";
+type TaskPriority = "" | "urgent" | "high" | "normal" | "low";
 
 export default function TaskFlowPage() {
+  const [statusFilter, setStatusFilter] = useState<TaskStatus>("all");
+  const [sourceFilter, setSourceFilter] = useState<TaskSource>("");
+  const [priorityFilter, setPriorityFilter] = useState<TaskPriority>("");
+
+  const filteredTasks = useMemo(() => {
+    return mockTasks.filter((task) => {
+      // Status filter
+      if (statusFilter !== "all" && task.status !== statusFilter) {
+        return false;
+      }
+      // Source filter
+      if (sourceFilter && task.source !== sourceFilter) {
+        return false;
+      }
+      // Priority filter
+      if (priorityFilter && task.priority !== priorityFilter) {
+        return false;
+      }
+      return true;
+    });
+  }, [statusFilter, sourceFilter, priorityFilter]);
+
   return (
     <div className="p-6 space-y-6">
       {/* Page header */}
@@ -43,35 +72,105 @@ export default function TaskFlowPage() {
       {/* Filters */}
       <div className="flex items-center gap-3 flex-wrap">
         <div className="flex items-center gap-2 border border-slate-700 rounded-lg p-1">
-          <FilterButton active>All Tasks</FilterButton>
-          <FilterButton>Open</FilterButton>
-          <FilterButton>In Progress</FilterButton>
-          <FilterButton>Completed</FilterButton>
+          <FilterButton 
+            active={statusFilter === "all"} 
+            onClick={() => setStatusFilter("all")}
+          >
+            All Tasks
+          </FilterButton>
+          <FilterButton 
+            active={statusFilter === "open"} 
+            onClick={() => setStatusFilter("open")}
+          >
+            Open
+          </FilterButton>
+          <FilterButton 
+            active={statusFilter === "in_progress"} 
+            onClick={() => setStatusFilter("in_progress")}
+          >
+            In Progress
+          </FilterButton>
+          <FilterButton 
+            active={statusFilter === "completed"} 
+            onClick={() => setStatusFilter("completed")}
+          >
+            Completed
+          </FilterButton>
         </div>
-        <select className="input w-auto text-sm">
+        <select 
+          className="input w-auto text-sm"
+          value={sourceFilter}
+          onChange={(e) => setSourceFilter(e.target.value as TaskSource)}
+        >
           <option value="">All Sources</option>
           <option value="voice">Voice</option>
           <option value="photo">Photo</option>
           <option value="message">Message</option>
           <option value="manual">Manual</option>
         </select>
-        <select className="input w-auto text-sm">
+        <select 
+          className="input w-auto text-sm"
+          value={priorityFilter}
+          onChange={(e) => setPriorityFilter(e.target.value as TaskPriority)}
+        >
           <option value="">All Priorities</option>
           <option value="urgent">Urgent</option>
           <option value="high">High</option>
           <option value="normal">Normal</option>
           <option value="low">Low</option>
         </select>
+        
+        {/* Clear filters button */}
+        {(statusFilter !== "all" || sourceFilter || priorityFilter) && (
+          <button 
+            className="text-sm text-slate-400 hover:text-white transition-colors"
+            onClick={() => {
+              setStatusFilter("all");
+              setSourceFilter("");
+              setPriorityFilter("");
+            }}
+          >
+            Clear filters
+          </button>
+        )}
+      </div>
+
+      {/* Results count */}
+      <div className="text-sm text-slate-400">
+        Showing {filteredTasks.length} of {mockTasks.length} tasks
       </div>
 
       {/* Tasks list */}
       <div className="space-y-3">
-        {mockTasks.map((task) => (
+        {filteredTasks.map((task) => (
           <TaskCard key={task.id} task={task} />
         ))}
       </div>
 
-      {/* Empty state (hidden when tasks exist) */}
+      {/* Empty state when no results */}
+      {filteredTasks.length === 0 && mockTasks.length > 0 && (
+        <div className="card p-12 text-center">
+          <div className="h-16 w-16 rounded-2xl bg-slate-800 flex items-center justify-center mx-auto mb-4">
+            <SearchIcon className="h-8 w-8 text-slate-500" />
+          </div>
+          <h3 className="text-lg font-medium mb-2">No matching tasks</h3>
+          <p className="text-slate-400 mb-6 max-w-sm mx-auto">
+            Try adjusting your filters to find what you&apos;re looking for
+          </p>
+          <button 
+            className="btn-secondary"
+            onClick={() => {
+              setStatusFilter("all");
+              setSourceFilter("");
+              setPriorityFilter("");
+            }}
+          >
+            Clear all filters
+          </button>
+        </div>
+      )}
+
+      {/* Empty state when no tasks exist */}
       {mockTasks.length === 0 && (
         <div className="card p-12 text-center">
           <div className="h-16 w-16 rounded-2xl bg-slate-800 flex items-center justify-center mx-auto mb-4">
@@ -91,9 +190,18 @@ export default function TaskFlowPage() {
 }
 
 // Components
-function FilterButton({ children, active }: { children: React.ReactNode; active?: boolean }) {
+function FilterButton({ 
+  children, 
+  active, 
+  onClick 
+}: { 
+  children: React.ReactNode; 
+  active?: boolean;
+  onClick?: () => void;
+}) {
   return (
     <button
+      onClick={onClick}
       className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
         active
           ? "bg-slate-700 text-white"
@@ -271,6 +379,14 @@ function DotsIcon({ className }: { className?: string }) {
   );
 }
 
+function SearchIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+    </svg>
+  );
+}
+
 // Mock data
 const mockTasks = [
   {
@@ -318,4 +434,3 @@ const mockTasks = [
     aiGenerated: false,
   },
 ];
-
