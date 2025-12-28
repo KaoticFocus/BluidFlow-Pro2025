@@ -11,9 +11,30 @@ export default function TaskFlowPage() {
   const [statusFilter, setStatusFilter] = useState<TaskStatus>("all");
   const [sourceFilter, setSourceFilter] = useState<TaskSource>("");
   const [priorityFilter, setPriorityFilter] = useState<TaskPriority>("");
+  const [tasks, setTasks] = useState(mockTasks);
+
+  const toggleTaskStatus = (taskId: string) => {
+    setTasks((prevTasks) =>
+      prevTasks.map((task) =>
+        task.id === taskId
+          ? {
+              ...task,
+              status:
+                task.status === "completed"
+                  ? "open"
+                  : task.status === "open"
+                  ? "completed"
+                  : task.status === "in_progress"
+                  ? "completed"
+                  : "completed",
+            }
+          : task
+      )
+    );
+  };
 
   const filteredTasks = useMemo(() => {
-    return mockTasks.filter((task) => {
+    return tasks.filter((task) => {
       // Status filter
       if (statusFilter !== "all" && task.status !== statusFilter) {
         return false;
@@ -28,7 +49,7 @@ export default function TaskFlowPage() {
       }
       return true;
     });
-  }, [statusFilter, sourceFilter, priorityFilter]);
+  }, [statusFilter, sourceFilter, priorityFilter, tasks]);
 
   return (
     <div className="p-6 space-y-6">
@@ -137,18 +158,18 @@ export default function TaskFlowPage() {
 
       {/* Results count */}
       <div className="text-sm text-slate-400">
-        Showing {filteredTasks.length} of {mockTasks.length} tasks
+        Showing {filteredTasks.length} of {tasks.length} tasks
       </div>
 
       {/* Tasks list */}
       <div className="space-y-3">
         {filteredTasks.map((task) => (
-          <TaskCard key={task.id} task={task} />
+          <TaskCard key={task.id} task={task} onToggleStatus={() => toggleTaskStatus(task.id)} />
         ))}
       </div>
 
       {/* Empty state when no results */}
-      {filteredTasks.length === 0 && mockTasks.length > 0 && (
+      {filteredTasks.length === 0 && tasks.length > 0 && (
         <div className="card p-12 text-center">
           <div className="h-16 w-16 rounded-2xl bg-slate-800 flex items-center justify-center mx-auto mb-4">
             <SearchIcon className="h-8 w-8 text-slate-500" />
@@ -171,7 +192,7 @@ export default function TaskFlowPage() {
       )}
 
       {/* Empty state when no tasks exist */}
-      {mockTasks.length === 0 && (
+      {tasks.length === 0 && (
         <div className="card p-12 text-center">
           <div className="h-16 w-16 rounded-2xl bg-slate-800 flex items-center justify-center mx-auto mb-4">
             <TaskIcon className="h-8 w-8 text-slate-500" />
@@ -213,7 +234,13 @@ function FilterButton({
   );
 }
 
-function TaskCard({ task }: { task: typeof mockTasks[0] }) {
+function TaskCard({ 
+  task, 
+  onToggleStatus 
+}: { 
+  task: typeof mockTasks[0];
+  onToggleStatus: () => void;
+}) {
   const priorityColors = {
     urgent: "border-l-red-500",
     high: "border-l-amber-500",
@@ -240,11 +267,15 @@ function TaskCard({ task }: { task: typeof mockTasks[0] }) {
     <div className={`card p-4 border-l-4 ${priorityColors[task.priority as keyof typeof priorityColors]} hover:border-slate-700 transition-colors`}>
       <div className="flex items-start gap-4">
         {/* Checkbox */}
-        <button className={`mt-1 h-5 w-5 rounded border ${
-          task.status === "completed" 
-            ? "bg-emerald-500 border-emerald-500" 
-            : "border-slate-600 hover:border-slate-500"
-        } flex items-center justify-center transition-colors`}>
+        <button 
+          onClick={onToggleStatus}
+          className={`mt-1 h-5 w-5 rounded border ${
+            task.status === "completed" 
+              ? "bg-emerald-500 border-emerald-500 hover:bg-emerald-600" 
+              : "border-slate-600 hover:border-slate-500 hover:bg-slate-700/50"
+          } flex items-center justify-center transition-colors cursor-pointer`}
+          aria-label={task.status === "completed" ? "Mark as incomplete" : "Mark as complete"}
+        >
           {task.status === "completed" && (
             <CheckIcon className="h-3 w-3 text-white" />
           )}
