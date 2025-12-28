@@ -1,0 +1,16 @@
+# Netlify configuration for BuildFlow Pro
+# Only builds the Next.js frontend - API is deployed separately
+
+[build]
+  base = "apps/web"
+  command = "npm run build"
+  publish = ".next"
+
+[build.environment]
+  NODE_VERSION = "20"
+  NPM_FLAGS = "--legacy-peer-deps"
+
+# Install dependencies from root first
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
