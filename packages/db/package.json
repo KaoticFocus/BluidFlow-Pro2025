@@ -1,0 +1,25 @@
+{
+  "name": "@buildflow/db",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "lint": "echo \"lint not configured\"",
+    "typecheck": "tsc -p tsconfig.json",
+    "db:generate": "prisma generate",
+    "db:push": "prisma db push",
+    "db:migrate": "prisma migrate dev",
+    "db:seed": "tsx prisma/seed.ts",
+    "db:studio": "prisma studio",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  },
+  "devDependencies": {
+    "@prisma/client": "^6.19.1",
+    "prisma": "^6.19.1",
+    "tsx": "^4.7.0",
+    "typescript": "^5.6.3"
+  }
+}
