@@ -3,6 +3,9 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { SignOutButton } from './SignOutButton'
 
+// Force dynamic rendering - these pages require auth
+export const dynamic = 'force-dynamic'
+
 export default async function DashboardLayout({
   children,
 }: {

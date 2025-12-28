@@ -6,6 +6,8 @@ export async function createClient() {
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   
   if (!supabaseUrl || !supabaseAnonKey) {
+    // During build time, throw a clear error that will be caught by Next.js
+    // This should only happen if dynamic rendering is not properly configured
     throw new Error('Missing Supabase environment variables')
   }
   
@@ -34,4 +36,3 @@ export async function createClient() {
     }
   )
 }
-
