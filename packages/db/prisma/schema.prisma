@@ -82,6 +82,7 @@ model Tenant {
   sessions    Session[]
   outboxEvents OutboxEvent[]
   idempotencyKeys IdempotencyKey[]
+  eventLogs   EventLog[]
 
   // Module entities (scoped to tenant)
   tasks      Task[]
@@ -366,6 +367,75 @@ model OutboxEvent {
   @@index([status, createdAt])
   @@index([tenantId, aggregateId])
   @@map("outbox_events")
+}
+
+// ============================================================================
+// EVENT LOG: Immutable Event Store
+// ============================================================================
+
+model EventLog {
+  sequence      BigInt   @id @default(autoincrement()) @db.BigInt
+  eventId       String   @unique @map("event_id") @db.Uuid
+  tenantId      String   @map("tenant_id") @db.Uuid
+  schemaId      String   @map("schema_id") // e.g., foundation.user.created
+  schemaVersion String   @map("schema_version") // e.g., v1
+  headers       Json     // { traceId, correlationId, actorUserId, etc. }
+  payloadRedacted Json   @map("payload_redacted") // Redacted payload for privacy
+  payloadHash   String   @map("payload_hash") // SHA256 of full payload
+  publishedAt   DateTime @default(now()) @map("published_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  consumerEvents ConsumerEvent[]
+  dlqMessages DLQMessage[]
+
+  @@index([tenantId, sequence])
+  @@index([schemaId, sequence])
+  @@index([tenantId, publishedAt])
+  @@map("event_log")
+}
+
+// ============================================================================
+// CONSUMER EVENT: Track Event Processing
+// ============================================================================
+
+model ConsumerEvent {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  consumerName String  @map("consumer_name")
+  eventId     String   @map("event_id") @db.Uuid
+  sequence    BigInt   @map("sequence") @db.BigInt
+  status      String   @default("pending") // pending, processing, completed, failed
+  processedAt DateTime? @map("processed_at")
+  attempts    Int      @default(0)
+  lastError   String?  @map("last_error")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  event EventLog @relation(fields: [eventId], references: [eventId], onDelete: Cascade)
+
+  @@unique([consumerName, eventId])
+  @@index([consumerName, status, createdAt])
+  @@index([consumerName, sequence])
+  @@map("consumer_events")
+}
+
+// ============================================================================
+// DLQ: Dead Letter Queue
+// ============================================================================
+
+model DLQMessage {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  consumerName  String   @map("consumer_name")
+  eventId       String   @map("event_id") @db.Uuid
+  sequence      BigInt   @map("sequence") @db.BigInt
+  failureReason String   @map("failure_reason")
+  payloadSnapshot Json   @map("payload_snapshot") // Snapshot of event payload
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  event EventLog @relation(fields: [eventId], references: [eventId], onDelete: Cascade)
+
+  @@index([consumerName, createdAt])
+  @@index([eventId])
+  @@map("dlq_messages")
 }
 
 // ============================================================================
