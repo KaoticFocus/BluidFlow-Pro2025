@@ -654,7 +654,7 @@ taskflowRoutes.post(
       const item = await tx.task.create({
         data: {
           tenantId,
-          parentTaskId: taskId, // @ts-expect-error - parentTaskId exists in schema but Prisma client needs regeneration
+          parentTaskId: taskId,
           projectId: parentTask.projectId,
           source: "manual",
           type: "checklist_item",
@@ -730,7 +730,7 @@ taskflowRoutes.patch(
       where: {
         id: itemId,
         tenantId,
-        parentTaskId: taskId, // @ts-expect-error - parentTaskId exists in schema but Prisma client needs regeneration
+        parentTaskId: taskId,
         type: "checklist_item",
       } as any,
     });
@@ -755,7 +755,7 @@ taskflowRoutes.patch(
       if (input.status === "completed") {
         const allItems = await tx.task.findMany({
           where: {
-            parentTaskId: taskId, // @ts-expect-error - parentTaskId exists in schema but Prisma client needs regeneration
+            parentTaskId: taskId,
             tenantId,
             type: "checklist_item",
           } as any,
@@ -842,7 +842,7 @@ taskflowRoutes.get("/tasks/:id/checklist", async (c: Context) => {
 
   const checklistItems = await prisma.task.findMany({
     where: {
-      parentTaskId: taskId, // @ts-expect-error - parentTaskId exists in schema but Prisma client needs regeneration
+      parentTaskId: taskId,
       tenantId,
       type: "checklist_item",
     } as any,

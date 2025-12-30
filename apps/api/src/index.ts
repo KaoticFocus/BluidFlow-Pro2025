@@ -13,6 +13,7 @@ import { ai } from "./routes/ai";
 import { consents } from "./routes/consents";
 import { taskflowRoutes } from "./routes/taskflow";
 import { meetings } from "./routes/meetings";
+import { internalEvents } from "./routes/internal/events";
 
 const app = new Hono();
 
