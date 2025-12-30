@@ -5,6 +5,7 @@ import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
 import { authMiddleware, tenantMiddleware, requirePermission } from "../middleware/auth";
 import type { AuthContext } from "../middleware/auth";
+import { idempotencyMiddleware } from "../middleware/idempotency";
 import { PERMISSIONS } from "../../../../packages/shared/src/rbac";
 import { prisma } from "../lib/prisma";
 import { createOutboxEvent } from "../lib/outbox";
@@ -13,6 +14,9 @@ const taskflowRoutes = new Hono();
 
 // All routes require authentication and tenant context
 taskflowRoutes.use("*", authMiddleware, tenantMiddleware);
+
+// Apply idempotency middleware to mutation endpoints
+taskflowRoutes.use("*", idempotencyMiddleware);
 
 // ============================================================================
 // UPLOADS

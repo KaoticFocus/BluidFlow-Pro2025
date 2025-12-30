@@ -7,6 +7,7 @@ import { InviteSchema, AcceptInviteSchema } from "../../../../packages/shared/sr
 import { PERMISSIONS } from "../../../../packages/shared/src/rbac";
 import { authMiddleware, tenantMiddleware, requirePermission } from "../middleware/auth";
 import type { AuthContext } from "../middleware/auth";
+import { idempotencyMiddleware } from "../middleware/idempotency";
 import { generateInviteToken, hashPassword } from "../lib/password";
 import { createOutboxEvent, FOUNDATION_EVENTS } from "../lib/outbox";
 import { prisma } from "../lib/prisma";
@@ -17,6 +18,9 @@ const tenants = new Hono();
 
 // All routes require authentication
 tenants.use("*", authMiddleware);
+
+// Apply idempotency middleware to mutation endpoints
+tenants.use("*", idempotencyMiddleware);
 
 /**
  * POST /tenants

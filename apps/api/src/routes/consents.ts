@@ -11,6 +11,7 @@ import {
 import { PERMISSIONS } from "../../../../packages/shared/src/rbac";
 import { authMiddleware, tenantMiddleware, requirePermission } from "../middleware/auth";
 import type { AuthContext } from "../middleware/auth";
+import { idempotencyMiddleware } from "../middleware/idempotency";
 import { createOutboxEvent, FOUNDATION_EVENTS } from "../lib/outbox";
 import { prisma } from "../lib/prisma";
 import { parsePagination, createPaginatedResponse } from "../lib/pagination";
@@ -19,6 +20,9 @@ const consents = new Hono();
 
 // All routes require authentication and tenant context
 consents.use("*", authMiddleware, tenantMiddleware);
+
+// Apply idempotency middleware to mutation endpoints
+consents.use("*", idempotencyMiddleware);
 
 /**
  * POST /consents

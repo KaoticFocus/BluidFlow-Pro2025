@@ -81,6 +81,7 @@ model Tenant {
   aiActions   AIActionLog[]
   sessions    Session[]
   outboxEvents OutboxEvent[]
+  idempotencyKeys IdempotencyKey[]
 
   // Module entities (scoped to tenant)
   tasks      Task[]
@@ -317,6 +318,29 @@ model AIActionSideEffect {
   @@index([logId])
   @@index([tenantId, status, createdAt(sort: Desc)])
   @@map("ai_action_side_effects")
+}
+
+// ============================================================================
+// IDEMPOTENCY
+// ============================================================================
+
+model IdempotencyKey {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId    String   @map("tenant_id") @db.Uuid
+  keyHash     String   @map("key_hash") // SHA256 hash of tenantId + route + idempotencyKey
+  route       String   // e.g., POST /taskflow/tasks
+  method      String   // GET, POST, PATCH, etc.
+  statusCode  Int      @map("status_code")
+  responseBody Json    @map("response_body")
+  expiresAt   DateTime @map("expires_at") // 24 hours from creation
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, keyHash])
+  @@index([expiresAt])
+  @@index([tenantId, route])
+  @@map("idempotency_keys")
 }
 
 // ============================================================================

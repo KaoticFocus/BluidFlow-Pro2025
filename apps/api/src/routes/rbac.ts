@@ -6,6 +6,7 @@ import { AssignRolesSchema, PERMISSIONS } from "../../../../packages/shared/src/
 import { z } from "zod";
 import { authMiddleware, tenantMiddleware, requirePermission } from "../middleware/auth";
 import type { AuthContext } from "../middleware/auth";
+import { idempotencyMiddleware } from "../middleware/idempotency";
 import { createOutboxEvent, FOUNDATION_EVENTS } from "../lib/outbox";
 import { prisma } from "../lib/prisma";
 
@@ -13,6 +14,9 @@ const rbac = new Hono();
 
 // All routes require authentication and tenant context
 rbac.use("*", authMiddleware, tenantMiddleware);
+
+// Apply idempotency middleware to mutation endpoints
+rbac.use("*", idempotencyMiddleware);
 
 /**
  * GET /rbac/roles
