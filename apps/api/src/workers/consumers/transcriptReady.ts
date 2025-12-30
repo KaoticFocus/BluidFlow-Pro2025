@@ -59,12 +59,12 @@ async function processTranscriptEvent(event: {
     .digest("hex");
 
   // Check if we've already processed this transcript
-  // Use dedupe key: tenantId + transcriptId + contentHash
-  const dedupeKey = `transcript:${transcript.meeting.tenantId}:${transcriptId}:${contentHash}`;
-  
-  const existingAction = await prisma.outboxEvent.findFirst({
+  const existingAction = await prisma.aIActionLog.findFirst({
     where: {
-      dedupeKey,
+      tenantId: transcript.meeting.tenantId,
+      inputRefTable: "meeting_transcripts",
+      inputRefId: transcriptId,
+      contentHash,
     },
   });
 
