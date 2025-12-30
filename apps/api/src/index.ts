@@ -90,6 +90,9 @@ app.route("/v1/taskflow", taskflowRoutes);
 // MeetingFlow routes
 app.route("/v1/meetings", meetings);
 
+// Internal service routes (require service auth)
+app.route("/internal", internalEvents);
+
 // ============================================================================
 // Error Handling
 // ============================================================================
