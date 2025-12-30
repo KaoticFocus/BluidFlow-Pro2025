@@ -385,23 +385,109 @@ taskflowRoutes.post("/daily-plans/generate", zValidator("json", GenerateDailyPla
   const tenantId = authCtx.tenantId!;
   const input = c.req.valid("json") as z.infer<typeof GenerateDailyPlanSchema>;
 
-  // TODO: Implement AI daily plan generation
-  // For now, create a placeholder daily plan
-  const dailyPlan = await prisma.dailyPlan.create({
-    data: {
-      tenantId,
-      projectId: input.project_id || null,
-      date: input.date,
-      status: "pending_approval",
-      taskIds: [],
-      aiGenerated: true,
-      createdById: authCtx.user.id,
+  const planDate = new Date(input.date);
+  const planDateStr = input.date; // YYYY-MM-DD format
+
+  // Query tasks for daily plan generation
+  // 1. Tasks in TODO/IN_PROGRESS status due on/before the plan date
+  // 2. Recent approved AI-generated tasks
+  // 3. Backlog items (no due date, open status)
+  const where: any = {
+    tenantId,
+    type: { not: "checklist_item" }, // Exclude checklist items
+  };
+
+  if (input.project_id) {
+    where.projectId = input.project_id;
+  }
+
+  // Get tasks that should be included
+  const candidateTasks = await prisma.task.findMany({
+    where: {
+      ...where,
+      OR: [
+        // Tasks due on or before plan date
+        {
+          status: { in: ["open", "in_progress"] },
+          dueDate: { lte: planDate },
+        },
+        // Recent approved AI tasks (last 7 days)
+        {
+          status: "open",
+          aiGenerated: true,
+          createdAt: {
+            gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
+          },
+        },
+        // Backlog items (no due date, open)
+        {
+          status: "open",
+          dueDate: null,
+        },
+      ],
     },
+    orderBy: [
+      { priority: "desc" }, // High priority first
+      { dueDate: "asc" }, // Due date ascending
+      { createdAt: "desc" }, // Recent first
+    ],
+    take: 16, // Cap at 16 items
+  });
+
+  const taskIds = candidateTasks.map((task) => task.id);
+
+  // Calculate metrics
+  const metrics = {
+    total: candidateTasks.length,
+    pinned: 0, // TODO: Add pinned field to Task model if needed
+    dueToday: candidateTasks.filter((t) => {
+      if (!t.dueDate) return false;
+      const dueDateStr = t.dueDate.toISOString().split("T")[0];
+      return dueDateStr === planDateStr;
+    }).length,
+    overdue: candidateTasks.filter((t) => {
+      if (!t.dueDate) return false;
+      return t.dueDate < planDate && t.status !== "completed";
+    }).length,
+  };
+
+  const dailyPlan = await prisma.$transaction(async (tx) => {
+    const plan = await tx.dailyPlan.create({
+      data: {
+        tenantId,
+        projectId: input.project_id || null,
+        date: planDateStr,
+        status: "pending_approval",
+        taskIds,
+        summary: `Daily plan for ${planDateStr} with ${taskIds.length} tasks`,
+        aiGenerated: true,
+        createdById: authCtx.user.id,
+      },
+    });
+
+    // Emit event
+    await tx.outboxEvent.create({
+      data: createOutboxEvent({
+        tenantId,
+        eventType: "daily_plan.generated.v1",
+        aggregateId: plan.id,
+        actorUserId: authCtx.user.id,
+        payload: {
+          dailyPlanId: plan.id,
+          date: planDateStr,
+          taskIds,
+          metrics,
+        },
+      }),
+    });
+
+    return plan;
   });
 
   return c.json(
     {
       daily_plan_id: dailyPlan.id,
+      metrics,
       ai_job_id: crypto.randomUUID(),
     },
     202
@@ -434,11 +520,88 @@ taskflowRoutes.get("/daily-plans/:id", async (c: Context) => {
       task_ids: plan.taskIds,
       summary: plan.summary,
       ai_generated: plan.aiGenerated,
+      approved_by_id: plan.approvedById,
+      approved_at: plan.approvedAt?.toISOString() || null,
       created_at: plan.createdAt.toISOString(),
       updated_at: plan.updatedAt.toISOString(),
     },
   });
 });
+
+/**
+ * POST /taskflow/daily-plans/:id/approve
+ * Approve a daily plan
+ */
+const ApproveDailyPlanSchema = z.object({
+  note: z.string().max(2000).optional(),
+});
+
+taskflowRoutes.post(
+  "/daily-plans/:id/approve",
+  requirePermission(PERMISSIONS.TASKS_APPROVE),
+  zValidator("json", ApproveDailyPlanSchema),
+  async (c: Context) => {
+    const authCtx = c.get("auth") as AuthContext;
+    const tenantId = authCtx.tenantId!;
+    const planId = c.req.param("id");
+    const input = c.req.valid("json") as z.infer<typeof ApproveDailyPlanSchema>;
+
+    const plan = await prisma.dailyPlan.findFirst({
+      where: {
+        id: planId,
+        tenantId,
+      },
+    });
+
+    if (!plan) {
+      throw new HTTPException(404, { message: "Daily plan not found" });
+    }
+
+    if (plan.status !== "pending_approval") {
+      throw new HTTPException(400, {
+        message: `Daily plan is not pending approval. Current status: ${plan.status}`,
+      });
+    }
+
+    const updatedPlan = await prisma.$transaction(async (tx) => {
+      const approved = await tx.dailyPlan.update({
+        where: { id: planId },
+        data: {
+          status: "approved",
+          approvedById: authCtx.user.id,
+          approvedAt: new Date(),
+        },
+      });
+
+      // Emit event
+      await tx.outboxEvent.create({
+        data: createOutboxEvent({
+          tenantId,
+          eventType: "daily_plan.approved.v1",
+          aggregateId: approved.id,
+          actorUserId: authCtx.user.id,
+          payload: {
+            dailyPlanId: approved.id,
+            date: approved.date,
+            taskIds: approved.taskIds,
+            note: input.note || null,
+          },
+        }),
+      });
+
+      return approved;
+    });
+
+    return c.json({
+      status: "approved",
+      daily_plan: {
+        id: updatedPlan.id,
+        status: updatedPlan.status,
+        approved_at: updatedPlan.approvedAt?.toISOString(),
+      },
+    });
+  }
+);
 
 // ============================================================================
 // CHECKLIST OPERATIONS
