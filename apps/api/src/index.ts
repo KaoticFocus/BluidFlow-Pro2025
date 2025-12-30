@@ -147,6 +147,19 @@ app.notFound((c) => {
 
 export default app;
 
+// ============================================================================
+// Workers
+// ============================================================================
+
+// Start workers in development (in production, run as separate process)
+if (process.env.NODE_ENV === "development" && process.env.START_WORKERS !== "false") {
+  import("./workers").then(({ startWorkers }) => {
+    startWorkers().catch((error) => {
+      console.error("Failed to start workers:", error);
+    });
+  });
+}
+
 // For local development with Node.js
 const port = process.env.PORT ? parseInt(process.env.PORT) : 3001;
 
