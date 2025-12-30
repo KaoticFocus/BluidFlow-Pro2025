@@ -4,6 +4,7 @@
  */
 
 import { startTranscriptConsumer } from "./consumers/transcriptReady";
+import { startOutboxRelay } from "./outbox-relay.worker";
 
 let workersRunning = false;
 
@@ -18,6 +19,9 @@ export async function startWorkers() {
   }
 
   console.log("Starting workers...");
+
+  // Start outbox relay (moves events from outbox to event_log)
+  await startOutboxRelay();
 
   // Start transcript consumer
   await startTranscriptConsumer();
@@ -35,7 +39,16 @@ export async function stopWorkers() {
   }
 
   console.log("Stopping workers...");
-  // TODO: Implement graceful shutdown
+  
+  // Import stop functions
+  const { stopOutboxRelay } = await import("./outbox-relay.worker");
+  const { stopTranscriptConsumer } = await import("./consumers/transcriptReady");
+
+  await Promise.all([
+    stopOutboxRelay(),
+    stopTranscriptConsumer(),
+  ]);
+
   workersRunning = false;
   console.log("All workers stopped");
 }
