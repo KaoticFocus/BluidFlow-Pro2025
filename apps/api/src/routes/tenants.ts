@@ -10,6 +10,8 @@ import type { AuthContext } from "../middleware/auth";
 import { generateInviteToken, hashPassword } from "../lib/password";
 import { createOutboxEvent, FOUNDATION_EVENTS } from "../lib/outbox";
 import { prisma } from "../lib/prisma";
+import { parsePagination, createPaginatedResponse, buildCursor } from "../lib/pagination";
+import { generateUniqueSlug } from "../lib/slug";
 
 const tenants = new Hono();
 
@@ -17,8 +19,205 @@ const tenants = new Hono();
 tenants.use("*", authMiddleware);
 
 /**
+ * POST /tenants
+ * Create a new tenant
+ */
+tenants.post("/", zValidator("json", z.object({
+  name: z.string().min(1).max(100),
+})), async (c: Context) => {
+  const authCtx = c.get("auth") as AuthContext;
+  const input = c.req.valid("json") as { name: string };
+
+  const tenantSlug = generateUniqueSlug(input.name);
+
+  const result = await prisma.$transaction(async (tx) => {
+    const tenant = await tx.tenant.create({
+      data: {
+        name: input.name,
+        slug: tenantSlug,
+        ownerUserId: authCtx.user.id,
+      },
+    });
+
+    const membership = await tx.tenantMembership.create({
+      data: {
+        tenantId: tenant.id,
+        userId: authCtx.user.id,
+        status: "active",
+      },
+    });
+
+    // Get owner role and assign
+    const ownerRole = await tx.role.findFirst({
+      where: { key: "owner", isSystem: true },
+    });
+    if (ownerRole) {
+      await tx.membershipRole.create({
+        data: {
+          membershipId: membership.id,
+          roleId: ownerRole.id,
+        },
+      });
+    }
+
+    // Emit event
+    await tx.outboxEvent.create({
+      data: createOutboxEvent({
+        tenantId: tenant.id,
+        eventType: FOUNDATION_EVENTS.TENANT_CREATED,
+        aggregateId: tenant.id,
+        actorUserId: authCtx.user.id,
+        payload: {
+          tenantId: tenant.id,
+          name: tenant.name,
+          slug: tenant.slug,
+          ownerUserId: authCtx.user.id,
+        },
+      }),
+    });
+
+    return tenant;
+  });
+
+  return c.json({
+    id: result.id,
+    name: result.name,
+    slug: result.slug,
+    createdAt: result.createdAt.toISOString(),
+  }, 201);
+});
+
+/**
+ * GET /tenants
+ * List user's tenants
+ */
+tenants.get("/", async (c: Context) => {
+  const authCtx = c.get("auth") as AuthContext;
+
+  const memberships = await prisma.tenantMembership.findMany({
+    where: { userId: authCtx.user.id, status: "active" },
+    include: {
+      tenant: { select: { id: true, name: true, slug: true, createdAt: true } },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  const tenants = memberships.map((m) => ({
+    id: m.tenant.id,
+    name: m.tenant.name,
+    slug: m.tenant.slug,
+    createdAt: m.tenant.createdAt.toISOString(),
+  }));
+
+  return c.json({ tenants });
+});
+
+/**
+ * GET /tenants/:id
+ * Get tenant details
+ */
+tenants.get("/:id", tenantMiddleware, async (c: Context) => {
+  const authCtx = c.get("auth") as AuthContext;
+  const tenantId = c.req.param("id");
+
+  // Verify membership
+  const membership = await prisma.tenantMembership.findUnique({
+    where: {
+      tenantId_userId: {
+        tenantId,
+        userId: authCtx.user.id,
+      },
+    },
+  });
+
+  if (!membership && !authCtx.user.isPlatformAdmin) {
+    throw new HTTPException(403, { message: "Access denied to this tenant" });
+  }
+
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+      plan: true,
+      settings: true,
+      createdAt: true,
+      updatedAt: true,
+    },
+  });
+
+  if (!tenant) {
+    throw new HTTPException(404, { message: "Tenant not found" });
+  }
+
+  return c.json({ tenant });
+});
+
+/**
+ * PATCH /tenants/:id
+ * Update tenant
+ */
+tenants.patch("/:id", tenantMiddleware, requirePermission(PERMISSIONS.TENANTS_SETTINGS), zValidator("json", z.object({
+  name: z.string().min(1).max(100).optional(),
+  settings: z.record(z.any()).optional(),
+})), async (c: Context) => {
+  const authCtx = c.get("auth") as AuthContext;
+  const tenantId = c.req.param("id");
+  const input = c.req.valid("json") as { name?: string; settings?: Record<string, any> };
+
+  // Verify ownership or permission
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+  });
+
+  if (!tenant) {
+    throw new HTTPException(404, { message: "Tenant not found" });
+  }
+
+  if (tenant.ownerUserId !== authCtx.user.id && !authCtx.user.isPlatformAdmin) {
+    throw new HTTPException(403, { message: "Only the tenant owner can update tenant details" });
+  }
+
+  const updateData: any = {};
+  if (input.name !== undefined) updateData.name = input.name;
+  if (input.settings !== undefined) updateData.settings = input.settings;
+
+  const updatedTenant = await prisma.$transaction(async (tx) => {
+    const updated = await tx.tenant.update({
+      where: { id: tenantId },
+      data: updateData,
+    });
+
+    await tx.outboxEvent.create({
+      data: createOutboxEvent({
+        tenantId,
+        eventType: "tenant.updated.v1",
+        aggregateId: tenantId,
+        actorUserId: authCtx.user.id,
+        payload: {
+          tenantId,
+          changes: input,
+        },
+      }),
+    });
+
+    return updated;
+  });
+
+  return c.json({
+    id: updatedTenant.id,
+    name: updatedTenant.name,
+    slug: updatedTenant.slug,
+    plan: updatedTenant.plan,
+    settings: updatedTenant.settings,
+    updatedAt: updatedTenant.updatedAt.toISOString(),
+  });
+});
+
+/**
  * GET /tenants/members
- * List members of current tenant
+ * List members of current tenant (with pagination)
  */
 tenants.get(
   "/members",
@@ -27,14 +226,21 @@ tenants.get(
   async (c: Context) => {
     const authCtx = c.get("auth") as AuthContext;
     const tenantId = authCtx.tenantId!;
+    const pagination = parsePagination(c, 20, 100);
+
+    const where: any = { tenantId, status: { not: "disabled" } };
+    if (pagination.cursor) {
+      where.id = { lt: pagination.cursor };
+    }
 
     const memberships = await prisma.tenantMembership.findMany({
-      where: { tenantId, status: { not: "disabled" } },
+      where,
       include: {
         user: { select: { id: true, email: true, name: true, avatarUrl: true } },
         roles: { include: { role: { select: { id: true, key: true, name: true } } } },
       },
       orderBy: { createdAt: "desc" },
+      take: pagination.limit + 1, // Fetch one extra to check hasMore
     });
 
     const members = memberships.map((m: any) => ({
@@ -45,10 +251,16 @@ tenants.get(
       userAvatarUrl: m.user.avatarUrl,
       status: m.status,
       roles: m.roles.map((r: any) => r.role),
-      createdAt: m.createdAt,
+      createdAt: m.createdAt.toISOString(),
     }));
 
-    return c.json({ members });
+    const paginated = createPaginatedResponse(members, pagination.limit, (m) => m.id);
+
+    return c.json({
+      members: paginated.items,
+      nextCursor: paginated.nextCursor,
+      hasMore: paginated.hasMore,
+    });
   }
 );
 
