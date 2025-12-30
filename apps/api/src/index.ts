@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import type { Context } from "hono";
 import { cors } from "hono/cors";
-import { logger } from "hono/logger";
+import { logger as honoLogger } from "hono/logger";
 import { secureHeaders } from "hono/secure-headers";
 import { HTTPException } from "hono/http-exception";
 import { initializeOpenTelemetry, shutdownOpenTelemetry } from "./lib/otel";
@@ -35,7 +35,7 @@ initializeOpenTelemetry();
 // ============================================================================
 
 // Logging
-app.use("*", logger());
+app.use("*", honoLogger());
 
 // Security headers
 app.use("*", secureHeaders());
