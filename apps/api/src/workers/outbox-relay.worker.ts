@@ -5,6 +5,8 @@
  */
 
 import { relayOutboxEvents, getRelayMetrics } from "../lib/event-relay";
+import { captureException, setContext } from "../lib/sentry";
+import { logger } from "../lib/logger";
 
 const POLL_INTERVAL_MS = 2000; // Poll every 2 seconds
 const METRICS_LOG_INTERVAL_MS = 60000; // Log metrics every minute
@@ -25,12 +27,17 @@ async function pollAndRelay() {
     const result = await relayOutboxEvents();
 
     if (result.processed > 0 || result.failed > 0) {
-      console.log(
-        `[Outbox Relay] Processed: ${result.processed}, Failed: ${result.failed}, Skipped: ${result.skipped}`
-      );
+      logger.info("Outbox relay batch processed", {
+        processed: result.processed,
+        failed: result.failed,
+        skipped: result.skipped,
+      });
     }
   } catch (error) {
-    console.error("[Outbox Relay] Error in poll cycle:", error);
+    logger.error("[Outbox Relay] Error in poll cycle", error);
+    captureException(error instanceof Error ? error : new Error(String(error)), {
+      component: "outbox_relay",
+    });
   }
 }
 
@@ -44,11 +51,12 @@ async function logMetrics() {
 
   try {
     const metrics = await getRelayMetrics();
-    console.log(
-      `[Outbox Relay Metrics] Pending: ${metrics.pendingCount}, Published: ${metrics.publishedCount}, Failed: ${metrics.failedCount}, DLQ: ${metrics.dlqCount}, Avg Lag: ${metrics.avgLagMs}ms`
-    );
+    logger.info("Outbox relay metrics", metrics);
+    
+    // Set Sentry context for monitoring
+    setContext("outbox_relay_metrics", metrics);
   } catch (error) {
-    console.error("[Outbox Relay] Error getting metrics:", error);
+    logger.error("[Outbox Relay] Error getting metrics", error);
   }
 }
 
@@ -57,23 +65,32 @@ async function logMetrics() {
  */
 export async function startOutboxRelay() {
   if (isRunning) {
-    console.warn("[Outbox Relay] Already running");
+    logger.warn("[Outbox Relay] Already running");
     return;
   }
 
-  console.log("[Outbox Relay] Starting...");
+  logger.info("[Outbox Relay] Starting...");
   isRunning = true;
 
-  // Start polling immediately
-  await pollAndRelay();
+  try {
+    // Start polling immediately
+    await pollAndRelay();
 
-  // Set up interval polling
-  pollInterval = setInterval(pollAndRelay, POLL_INTERVAL_MS);
+    // Set up interval polling
+    pollInterval = setInterval(pollAndRelay, POLL_INTERVAL_MS);
 
-  // Set up metrics logging
-  metricsInterval = setInterval(logMetrics, METRICS_LOG_INTERVAL_MS);
+    // Set up metrics logging
+    metricsInterval = setInterval(logMetrics, METRICS_LOG_INTERVAL_MS);
 
-  console.log(`[Outbox Relay] Started (polling every ${POLL_INTERVAL_MS}ms)`);
+    logger.info(`[Outbox Relay] Started (polling every ${POLL_INTERVAL_MS}ms)`);
+  } catch (error) {
+    logger.error("[Outbox Relay] Failed to start", error);
+    captureException(error instanceof Error ? error : new Error(String(error)), {
+      component: "outbox_relay",
+    });
+    isRunning = false;
+    throw error;
+  }
 }
 
 /**
@@ -84,7 +101,7 @@ export async function stopOutboxRelay() {
     return;
   }
 
-  console.log("[Outbox Relay] Stopping...");
+  logger.info("[Outbox Relay] Stopping...");
   isRunning = false;
 
   if (pollInterval) {
@@ -97,6 +114,6 @@ export async function stopOutboxRelay() {
     metricsInterval = null;
   }
 
-  console.log("[Outbox Relay] Stopped");
+  logger.info("[Outbox Relay] Stopped");
 }
 

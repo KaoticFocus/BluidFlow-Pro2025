@@ -5,6 +5,8 @@
 
 import { startTranscriptConsumer } from "./consumers/transcriptReady";
 import { startOutboxRelay } from "./outbox-relay.worker";
+import { captureException, setContext } from "../lib/sentry";
+import { logger } from "../lib/logger";
 
 let workersRunning = false;
 
@@ -14,20 +16,28 @@ let workersRunning = false;
  */
 export async function startWorkers() {
   if (workersRunning) {
-    console.warn("Workers already running");
+    logger.warn("Workers already running");
     return;
   }
 
-  console.log("Starting workers...");
+  logger.info("Starting workers...");
 
-  // Start outbox relay (moves events from outbox to event_log)
-  await startOutboxRelay();
+  try {
+    // Start outbox relay (moves events from outbox to event_log)
+    await startOutboxRelay();
 
-  // Start transcript consumer
-  await startTranscriptConsumer();
+    // Start transcript consumer
+    await startTranscriptConsumer();
 
-  workersRunning = true;
-  console.log("All workers started");
+    workersRunning = true;
+    logger.info("All workers started");
+  } catch (error) {
+    logger.error("Failed to start workers", error);
+    captureException(error instanceof Error ? error : new Error(String(error)), {
+      component: "worker_registry",
+    });
+    throw error;
+  }
 }
 
 /**
@@ -38,18 +48,25 @@ export async function stopWorkers() {
     return;
   }
 
-  console.log("Stopping workers...");
+  logger.info("Stopping workers...");
   
-  // Import stop functions
-  const { stopOutboxRelay } = await import("./outbox-relay.worker");
-  const { stopTranscriptConsumer } = await import("./consumers/transcriptReady");
+  try {
+    // Import stop functions
+    const { stopOutboxRelay } = await import("./outbox-relay.worker");
+    const { stopTranscriptConsumer } = await import("./consumers/transcriptReady");
 
-  await Promise.all([
-    stopOutboxRelay(),
-    stopTranscriptConsumer(),
-  ]);
+    await Promise.all([
+      stopOutboxRelay(),
+      stopTranscriptConsumer(),
+    ]);
 
-  workersRunning = false;
-  console.log("All workers stopped");
+    workersRunning = false;
+    logger.info("All workers stopped");
+  } catch (error) {
+    logger.error("Error stopping workers", error);
+    captureException(error instanceof Error ? error : new Error(String(error)), {
+      component: "worker_registry",
+    });
+  }
 }
 

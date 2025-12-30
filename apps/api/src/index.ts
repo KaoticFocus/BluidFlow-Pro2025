@@ -5,6 +5,9 @@ import { logger } from "hono/logger";
 import { secureHeaders } from "hono/secure-headers";
 import { HTTPException } from "hono/http-exception";
 import { initializeOpenTelemetry, shutdownOpenTelemetry } from "./lib/otel";
+import { initializeSentry } from "./lib/sentry";
+import { captureException, setUserContext, setContext } from "./lib/sentry";
+import { logger } from "./lib/logger";
 
 // Routes
 import { auth } from "./routes/auth";
@@ -19,8 +22,11 @@ import { internalEvents } from "./routes/internal/events";
 const app = new Hono();
 
 // ============================================================================
-// OpenTelemetry Initialization
+// Observability Initialization
 // ============================================================================
+
+// Initialize Sentry (error tracking)
+initializeSentry();
 
 // Initialize OpenTelemetry (only if enabled)
 initializeOpenTelemetry();

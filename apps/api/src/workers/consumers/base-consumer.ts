@@ -11,6 +11,8 @@
 
 import { prisma } from "../../lib/prisma";
 import { withSpan, addSpanAttributes } from "../../lib/otel";
+import { captureException, setContext } from "../../lib/sentry";
+import { logger } from "../../lib/logger";
 
 export interface ConsumerConfig {
   name: string;
@@ -325,8 +327,20 @@ export abstract class BaseConsumer {
                 }
               }
             } catch (error) {
-              console.error(`[${this.config.name}] Error processing event ${event.eventId}:`, error);
+              logger.error(`[${this.config.name}] Error processing event ${event.eventId}`, error, {
+                eventId: event.eventId,
+                sequence: event.sequence.toString(),
+                schemaId: event.schemaId,
+              });
               eventSpan.recordException(error instanceof Error ? error : new Error(String(error)));
+              
+              // Capture in Sentry
+              captureException(error instanceof Error ? error : new Error(String(error)), {
+                component: this.config.name,
+                eventId: event.eventId,
+                sequence: event.sequence.toString(),
+              });
+              
               await this.markFailed(
                 event.eventId,
                 event.sequence,
@@ -337,8 +351,11 @@ export abstract class BaseConsumer {
           });
         }
       } catch (error) {
-        console.error(`[${this.config.name}] Error in poll cycle:`, error);
+        logger.error(`[${this.config.name}] Error in poll cycle`, error);
         span.recordException(error instanceof Error ? error : new Error(String(error)));
+        captureException(error instanceof Error ? error : new Error(String(error)), {
+          component: this.config.name,
+        });
       }
     });
   }
@@ -348,25 +365,41 @@ export abstract class BaseConsumer {
    */
   async start(): Promise<void> {
     if (this.isRunning) {
-      console.warn(`[${this.config.name}] Already running`);
+      logger.warn(`[${this.config.name}] Already running`);
       return;
     }
 
-    console.log(`[${this.config.name}] Starting...`);
+    logger.info(`[${this.config.name}] Starting...`);
     this.isRunning = true;
 
-    // Get initial checkpoint
-    this.lastCheckpoint = await this.getLastCheckpoint();
+    try {
+      // Get initial checkpoint
+      this.lastCheckpoint = await this.getLastCheckpoint();
 
-    // Start polling immediately
-    await this.pollAndProcess();
+      // Start polling immediately
+      await this.pollAndProcess();
 
-    // Set up interval polling
-    this.pollInterval = setInterval(() => {
-      this.pollAndProcess();
-    }, this.config.pollIntervalMs);
+      // Set up interval polling
+      this.pollInterval = setInterval(() => {
+        this.pollAndProcess();
+      }, this.config.pollIntervalMs);
 
-    console.log(`[${this.config.name}] Started (polling every ${this.config.pollIntervalMs}ms)`);
+      logger.info(`[${this.config.name}] Started (polling every ${this.config.pollIntervalMs}ms)`);
+      
+      // Set Sentry context
+      setContext("consumer", {
+        name: this.config.name,
+        schemaPrefix: this.config.schemaIdPrefix,
+        batchSize: this.config.batchSize,
+      });
+    } catch (error) {
+      logger.error(`[${this.config.name}] Failed to start`, error);
+      captureException(error instanceof Error ? error : new Error(String(error)), {
+        component: this.config.name,
+      });
+      this.isRunning = false;
+      throw error;
+    }
   }
 
   /**
@@ -377,7 +410,7 @@ export abstract class BaseConsumer {
       return;
     }
 
-    console.log(`[${this.config.name}] Stopping...`);
+    logger.info(`[${this.config.name}] Stopping...`);
     this.isRunning = false;
 
     if (this.pollInterval) {
@@ -385,7 +418,7 @@ export abstract class BaseConsumer {
       this.pollInterval = null;
     }
 
-    console.log(`[${this.config.name}] Stopped`);
+    logger.info(`[${this.config.name}] Stopped`);
   }
 
   /**

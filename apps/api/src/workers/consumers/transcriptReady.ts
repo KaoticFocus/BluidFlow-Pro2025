@@ -8,6 +8,7 @@ import { BaseConsumer, type ProcessResult } from "./base-consumer";
 import { prisma } from "../../lib/prisma";
 import { createOutboxEvent } from "../../lib/outbox";
 import { createHash } from "node:crypto";
+import { logger } from "../../lib/logger";
 
 /**
  * Extract action items from transcript text
@@ -187,14 +188,25 @@ const consumer = new TranscriptReadyConsumer();
  * Start the transcript consumer
  */
 export async function startTranscriptConsumer() {
-  await consumer.start();
+  try {
+    await consumer.start();
+    logger.info("Transcript consumer started");
+  } catch (error) {
+    logger.error("Failed to start transcript consumer", error);
+    throw error;
+  }
 }
 
 /**
  * Stop the transcript consumer
  */
 export async function stopTranscriptConsumer() {
-  await consumer.stop();
+  try {
+    await consumer.stop();
+    logger.info("Transcript consumer stopped");
+  } catch (error) {
+    logger.error("Error stopping transcript consumer", error);
+  }
 }
 
 /**
