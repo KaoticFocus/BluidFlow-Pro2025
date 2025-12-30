@@ -17,6 +17,8 @@ import { consents } from "./routes/consents";
 import { taskflowRoutes } from "./routes/taskflow";
 import { meetings } from "./routes/meetings";
 import { internalEvents } from "./routes/internal/events";
+import { docs } from "./routes/docs";
+import { registerOpenApiPaths } from "./lib/openapi-paths";
 
 const app = new Hono();
 
