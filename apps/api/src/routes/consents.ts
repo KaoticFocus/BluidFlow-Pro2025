@@ -1,14 +1,19 @@
 import { Hono } from "hono";
+import type { Context } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { HTTPException } from "hono/http-exception";
+import { z } from "zod";
 import { 
   CreateConsentSchema, 
   QueryConsentSchema, 
   CheckConsentSchema,
-  PERMISSIONS 
-} from "@buildflow/shared";
+} from "../../../../packages/shared/src/consent";
+import { PERMISSIONS } from "../../../../packages/shared/src/rbac";
 import { authMiddleware, tenantMiddleware, requirePermission } from "../middleware/auth";
+import type { AuthContext } from "../middleware/auth";
 import { createOutboxEvent, FOUNDATION_EVENTS } from "../lib/outbox";
+import { prisma } from "../lib/prisma";
+import { parsePagination, createPaginatedResponse } from "../lib/pagination";
 
 const consents = new Hono();
 
@@ -23,13 +28,11 @@ consents.post(
   "/",
   requirePermission(PERMISSIONS.CONSENTS_WRITE),
   zValidator("json", CreateConsentSchema),
-  async (c) => {
-    const authCtx = c.get("auth");
+  async (c: Context) => {
+    const authCtx = c.get("auth") as AuthContext;
     const tenantId = authCtx.tenantId!;
-    const input = c.req.valid("json");
+    const input = c.req.valid("json") as z.infer<typeof CreateConsentSchema>;
 
-    // TODO: Replace with Prisma implementation
-    /*
     const consent = await prisma.$transaction(async (tx) => {
       const newConsent = await tx.consent.create({
         data: {
@@ -42,7 +45,7 @@ consents.post(
           textVersion: input.textVersion,
           language: input.language,
           actorUserId: authCtx.user.id,
-          evidence: input.evidence || null,
+          evidence: input.evidence ? (input.evidence as any) : null,
         },
       });
 
@@ -67,9 +70,6 @@ consents.post(
     });
 
     return c.json({ consentId: consent.id }, 201);
-    */
-
-    return c.json({ consentId: "placeholder-consent-id" }, 201);
   }
 );
 
@@ -81,32 +81,57 @@ consents.get(
   "/",
   requirePermission(PERMISSIONS.CONSENTS_READ),
   zValidator("query", QueryConsentSchema),
-  async (c) => {
-    const authCtx = c.get("auth");
+  async (c: Context) => {
+    const authCtx = c.get("auth") as AuthContext;
     const tenantId = authCtx.tenantId!;
-    const query = c.req.valid("query");
+    const query = c.req.valid("query") as z.infer<typeof QueryConsentSchema>;
+    const pagination = parsePagination(c, 20, 100);
 
-    // TODO: Replace with Prisma implementation
-    /*
-    const where: Prisma.ConsentWhereInput = {
+    const where: any = {
       tenantId,
     };
 
     if (query.subjectType) where.subjectType = query.subjectType;
     if (query.subjectId) where.subjectId = query.subjectId;
     if (query.purposeKey) where.purposeKey = query.purposeKey;
-    if (query.activeOnly) where.revokedAt = null;
+    if (query.activeOnly !== false) {
+      where.revokedAt = null;
+    }
+    if (pagination.cursor) {
+      where.id = { lt: pagination.cursor };
+    }
 
-    const consents = await prisma.consent.findMany({
+    const consentsList = await prisma.consent.findMany({
       where,
       orderBy: { capturedAt: "desc" },
+      take: pagination.limit + 1, // Fetch one extra to check hasMore
       include: {
         actor: { select: { id: true, email: true, name: true } },
       },
     });
-    */
 
-    return c.json({ consents: [] });
+    const formattedConsents = consentsList.map((consent: any) => ({
+      id: consent.id,
+      subjectType: consent.subjectType,
+      subjectId: consent.subjectId,
+      purposeKey: consent.purposeKey,
+      channel: consent.channel,
+      policyHash: consent.policyHash,
+      textVersion: consent.textVersion,
+      language: consent.language,
+      actor: consent.actor,
+      evidence: consent.evidence,
+      capturedAt: consent.capturedAt.toISOString(),
+      revokedAt: consent.revokedAt?.toISOString() || null,
+    }));
+
+    const paginated = createPaginatedResponse(formattedConsents, pagination.limit, (consent) => consent.id);
+
+    return c.json({
+      consents: paginated.items,
+      nextCursor: paginated.nextCursor,
+      hasMore: paginated.hasMore,
+    });
   }
 );
 
@@ -118,13 +143,11 @@ consents.post(
   "/check",
   requirePermission(PERMISSIONS.CONSENTS_READ),
   zValidator("json", CheckConsentSchema),
-  async (c) => {
-    const authCtx = c.get("auth");
+  async (c: Context) => {
+    const authCtx = c.get("auth") as AuthContext;
     const tenantId = authCtx.tenantId!;
-    const input = c.req.valid("json");
+    const input = c.req.valid("json") as z.infer<typeof CheckConsentSchema>;
 
-    // TODO: Replace with Prisma implementation
-    /*
     const consent = await prisma.consent.findFirst({
       where: {
         tenantId,
@@ -134,19 +157,27 @@ consents.post(
         revokedAt: null,
       },
       orderBy: { capturedAt: "desc" },
+      include: {
+        actor: { select: { id: true, email: true, name: true } },
+      },
     });
 
     return c.json({
       hasConsent: !!consent,
-      consent: consent || null,
+      consent: consent ? {
+        id: consent.id,
+        subjectType: consent.subjectType,
+        subjectId: consent.subjectId,
+        purposeKey: consent.purposeKey,
+        channel: consent.channel,
+        policyHash: consent.policyHash,
+        textVersion: consent.textVersion,
+        language: consent.language,
+        actor: consent.actor,
+        evidence: consent.evidence,
+        capturedAt: consent.capturedAt.toISOString(),
+      } : null,
       expiresAt: null, // Consents don't expire in this implementation
-    });
-    */
-
-    return c.json({
-      hasConsent: false,
-      consent: null,
-      expiresAt: null,
     });
   }
 );
@@ -158,13 +189,15 @@ consents.post(
 consents.post(
   "/:id/revoke",
   requirePermission(PERMISSIONS.CONSENTS_WRITE),
-  async (c) => {
-    const authCtx = c.get("auth");
+  zValidator("json", z.object({
+    reason: z.string().max(500).optional(),
+  }).optional()),
+  async (c: Context) => {
+    const authCtx = c.get("auth") as AuthContext;
     const tenantId = authCtx.tenantId!;
     const consentId = c.req.param("id");
+    const input = c.req.valid("json") as { reason?: string } | undefined;
 
-    // TODO: Replace with Prisma implementation
-    /*
     const consent = await prisma.consent.findFirst({
       where: { id: consentId, tenantId },
     });
@@ -198,12 +231,11 @@ consents.post(
             subjectId: consent.subjectId,
             purposeKey: consent.purposeKey,
             revokedById: authCtx.user.id,
-            reason: null,
+            reason: input?.reason || null,
           },
         }),
       });
     });
-    */
 
     return c.body(null, 204);
   }
@@ -216,43 +248,73 @@ consents.post(
 consents.get(
   "/subject/:subjectType/:subjectId",
   requirePermission(PERMISSIONS.CONSENTS_READ),
-  async (c) => {
-    const authCtx = c.get("auth");
+  async (c: Context) => {
+    const authCtx = c.get("auth") as AuthContext;
     const tenantId = authCtx.tenantId!;
     const subjectType = c.req.param("subjectType");
     const subjectId = c.req.param("subjectId");
 
-    // TODO: Replace with Prisma implementation
-    /*
-    const consents = await prisma.consent.findMany({
+    const consentsList = await prisma.consent.findMany({
       where: {
         tenantId,
         subjectType,
         subjectId,
       },
       orderBy: { capturedAt: "desc" },
+      include: {
+        actor: { select: { id: true, email: true, name: true } },
+      },
     });
 
     // Group by purpose and get effective state
-    const byPurpose = consents.reduce((acc, consent) => {
-      if (!acc[consent.purposeKey]) {
-        acc[consent.purposeKey] = {
+    const byPurpose: Record<string, {
+      purposeKey: string;
+      hasActiveConsent: boolean;
+      latestConsent: any;
+      history: any[];
+    }> = {};
+
+    for (const consent of consentsList) {
+      if (!byPurpose[consent.purposeKey]) {
+        byPurpose[consent.purposeKey] = {
           purposeKey: consent.purposeKey,
           hasActiveConsent: consent.revokedAt === null,
-          latestConsent: consent,
+          latestConsent: {
+            id: consent.id,
+            subjectType: consent.subjectType,
+            subjectId: consent.subjectId,
+            purposeKey: consent.purposeKey,
+            channel: consent.channel,
+            policyHash: consent.policyHash,
+            textVersion: consent.textVersion,
+            language: consent.language,
+            actor: consent.actor,
+            evidence: consent.evidence,
+            capturedAt: consent.capturedAt.toISOString(),
+            revokedAt: consent.revokedAt?.toISOString() || null,
+          },
           history: [],
         };
       }
-      acc[consent.purposeKey].history.push(consent);
-      return acc;
-    }, {} as Record<string, { purposeKey: string; hasActiveConsent: boolean; latestConsent: typeof consents[0]; history: typeof consents }>);
-
-    return c.json({ subject: { type: subjectType, id: subjectId }, consents: Object.values(byPurpose) });
-    */
+      byPurpose[consent.purposeKey].history.push({
+        id: consent.id,
+        subjectType: consent.subjectType,
+        subjectId: consent.subjectId,
+        purposeKey: consent.purposeKey,
+        channel: consent.channel,
+        policyHash: consent.policyHash,
+        textVersion: consent.textVersion,
+        language: consent.language,
+        actor: consent.actor,
+        evidence: consent.evidence,
+        capturedAt: consent.capturedAt.toISOString(),
+        revokedAt: consent.revokedAt?.toISOString() || null,
+      });
+    }
 
     return c.json({ 
       subject: { type: subjectType, id: subjectId }, 
-      consents: [] 
+      consents: Object.values(byPurpose) 
     });
   }
 );
