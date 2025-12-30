@@ -85,6 +85,8 @@ export const FOUNDATION_EVENTS = {
   MEMBER_INVITED: "tenant.member.invited.v1",
   MEMBER_JOINED: "tenant.member.joined.v1",
   MEMBER_ROLES_CHANGED: "tenant.member.roles_changed.v1",
+  ROLE_CREATED: "role.created.v1",
+  ROLE_PERMISSIONS_UPDATED: "role.permissions.updated.v1",
   CONSENT_CAPTURED: "consent.captured.v1",
   CONSENT_REVOKED: "consent.revoked.v1",
   AI_ACTION_LOGGED: "ai.action.logged.v1",
