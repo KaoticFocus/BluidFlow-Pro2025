@@ -1,9 +1,11 @@
 import { Hono } from "hono";
+import type { Context } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
 import { authMiddleware, tenantMiddleware, requirePermission } from "../middleware/auth";
-import { PERMISSIONS } from "@buildflow/shared";
+import type { AuthContext } from "../middleware/auth";
+import { PERMISSIONS } from "../../../../packages/shared/src/rbac";
 import { prisma } from "../lib/prisma";
 import { createOutboxEvent } from "../lib/outbox";
 
@@ -22,10 +24,10 @@ const UploadPresignBodySchema = z.object({
   size_bytes: z.number().int().positive(),
 });
 
-taskflowRoutes.post("/uploads/presign", zValidator("json", UploadPresignBodySchema), async (c) => {
-  const authCtx = c.get("auth");
+taskflowRoutes.post("/uploads/presign", zValidator("json", UploadPresignBodySchema), async (c: Context) => {
+  const authCtx = c.get("auth") as AuthContext;
   const tenantId = authCtx.tenantId!;
-  const input = c.req.valid("json");
+  const input = c.req.valid("json") as z.infer<typeof UploadPresignBodySchema>;
 
   // TODO: Issue a real presigned URL (R2/S3)
   // For now return stub fields
@@ -61,10 +63,10 @@ const CreateTaskBodySchema = z.object({
   consent: z.boolean().optional(),
 });
 
-taskflowRoutes.post("/tasks", zValidator("json", CreateTaskBodySchema), async (c) => {
-  const authCtx = c.get("auth");
+taskflowRoutes.post("/tasks", zValidator("json", CreateTaskBodySchema), async (c: Context) => {
+  const authCtx = c.get("auth") as AuthContext;
   const tenantId = authCtx.tenantId!;
-  const input = c.req.valid("json");
+  const input = c.req.valid("json") as z.infer<typeof CreateTaskBodySchema>;
 
   const isAiSource = input.source === "voice" || input.source === "photo";
   const status = isAiSource ? "pending_approval" : "open";
@@ -127,8 +129,8 @@ taskflowRoutes.post("/tasks", zValidator("json", CreateTaskBodySchema), async (c
   }, 201);
 });
 
-taskflowRoutes.get("/tasks", async (c) => {
-  const authCtx = c.get("auth");
+taskflowRoutes.get("/tasks", async (c: Context) => {
+  const authCtx = c.get("auth") as AuthContext;
   const tenantId = authCtx.tenantId!;
 
   // Parse query params
@@ -154,7 +156,7 @@ taskflowRoutes.get("/tasks", async (c) => {
   });
 
   return c.json({
-    tasks: tasks.map((task) => ({
+    tasks: tasks.map((task: any) => ({
       id: task.id,
       tenant_id: task.tenantId,
       project_id: task.projectId,
@@ -173,8 +175,8 @@ taskflowRoutes.get("/tasks", async (c) => {
   });
 });
 
-taskflowRoutes.get("/tasks/:id", async (c) => {
-  const authCtx = c.get("auth");
+taskflowRoutes.get("/tasks/:id", async (c: Context) => {
+  const authCtx = c.get("auth") as AuthContext;
   const tenantId = authCtx.tenantId!;
   const taskId = c.req.param("id");
 
@@ -218,11 +220,11 @@ const UpdateTaskBodySchema = z.object({
   assignee_id: z.string().uuid().optional(),
 });
 
-taskflowRoutes.patch("/tasks/:id", zValidator("json", UpdateTaskBodySchema), async (c) => {
-  const authCtx = c.get("auth");
+taskflowRoutes.patch("/tasks/:id", zValidator("json", UpdateTaskBodySchema), async (c: Context) => {
+  const authCtx = c.get("auth") as AuthContext;
   const tenantId = authCtx.tenantId!;
   const taskId = c.req.param("id");
-  const input = c.req.valid("json");
+  const input = c.req.valid("json") as z.infer<typeof UpdateTaskBodySchema>;
 
   // Get existing task
   const existingTask = await prisma.task.findFirst({
@@ -312,11 +314,11 @@ taskflowRoutes.post(
   "/tasks/:id/approve",
   requirePermission(PERMISSIONS.TASKS_APPROVE),
   zValidator("json", ApproveTaskBodySchema),
-  async (c) => {
-    const authCtx = c.get("auth");
+  async (c: Context) => {
+    const authCtx = c.get("auth") as AuthContext;
     const tenantId = authCtx.tenantId!;
     const taskId = c.req.param("id");
-    const input = c.req.valid("json");
+    const input = c.req.valid("json") as z.infer<typeof ApproveTaskBodySchema>;
 
     const task = await prisma.task.findFirst({
       where: {
@@ -378,10 +380,10 @@ const GenerateDailyPlanSchema = z.object({
   constraints: z.record(z.any()).optional(),
 });
 
-taskflowRoutes.post("/daily-plans/generate", zValidator("json", GenerateDailyPlanSchema), async (c) => {
-  const authCtx = c.get("auth");
+taskflowRoutes.post("/daily-plans/generate", zValidator("json", GenerateDailyPlanSchema), async (c: Context) => {
+  const authCtx = c.get("auth") as AuthContext;
   const tenantId = authCtx.tenantId!;
-  const input = c.req.valid("json");
+  const input = c.req.valid("json") as z.infer<typeof GenerateDailyPlanSchema>;
 
   // TODO: Implement AI daily plan generation
   // For now, create a placeholder daily plan
@@ -406,8 +408,8 @@ taskflowRoutes.post("/daily-plans/generate", zValidator("json", GenerateDailyPla
   );
 });
 
-taskflowRoutes.get("/daily-plans/:id", async (c) => {
-  const authCtx = c.get("auth");
+taskflowRoutes.get("/daily-plans/:id", async (c: Context) => {
+  const authCtx = c.get("auth") as AuthContext;
   const tenantId = authCtx.tenantId!;
   const planId = c.req.param("id");
 

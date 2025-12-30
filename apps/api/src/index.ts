@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import type { Context } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { secureHeaders } from "hono/secure-headers";
@@ -47,7 +48,7 @@ app.use(
 // Health Check
 // ============================================================================
 
-app.get("/", (c) => {
+app.get("/", (c: Context) => {
   return c.json({
     name: "BuildFlow Pro API",
     version: "1.0.0",
@@ -56,7 +57,7 @@ app.get("/", (c) => {
   });
 });
 
-app.get("/health", (c) => {
+app.get("/health", (c: Context) => {
   return c.json({ status: "ok" });
 });
 
@@ -149,7 +150,8 @@ export default app;
 // For local development with Node.js
 const port = process.env.PORT ? parseInt(process.env.PORT) : 3001;
 
-if (typeof Bun !== "undefined") {
+// Check for Bun runtime (using type guard to avoid type errors)
+if (typeof globalThis !== "undefined" && "Bun" in globalThis) {
   // Running with Bun
   console.log(`🚀 Server running at http://localhost:${port}`);
 } else {

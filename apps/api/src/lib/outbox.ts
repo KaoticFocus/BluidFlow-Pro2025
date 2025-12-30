@@ -36,7 +36,7 @@ export interface OutboxEvent {
  * Create an outbox event record
  * Call this within the same database transaction as your domain changes
  */
-export function createOutboxEvent(input: OutboxEventInput): Omit<OutboxEvent, "id" | "createdAt"> {
+export function createOutboxEvent(input: OutboxEventInput): any {
   const now = new Date();
   
   return {

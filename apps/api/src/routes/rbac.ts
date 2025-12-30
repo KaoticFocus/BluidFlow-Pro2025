@@ -1,8 +1,11 @@
 import { Hono } from "hono";
+import type { Context } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { HTTPException } from "hono/http-exception";
-import { AssignRolesSchema, PERMISSIONS } from "@buildflow/shared";
+import { AssignRolesSchema, PERMISSIONS } from "../../../../packages/shared/src/rbac";
+import { z } from "zod";
 import { authMiddleware, tenantMiddleware, requirePermission } from "../middleware/auth";
+import type { AuthContext } from "../middleware/auth";
 import { createOutboxEvent, FOUNDATION_EVENTS } from "../lib/outbox";
 import { prisma } from "../lib/prisma";
 
@@ -15,8 +18,8 @@ rbac.use("*", authMiddleware, tenantMiddleware);
  * GET /rbac/roles
  * List roles available in the current tenant
  */
-rbac.get("/roles", async (c) => {
-  const authCtx = c.get("auth");
+rbac.get("/roles", async (c: Context) => {
+  const authCtx = c.get("auth") as AuthContext;
   const tenantId = authCtx.tenantId!;
 
   const roles = await prisma.role.findMany({
@@ -36,13 +39,13 @@ rbac.get("/roles", async (c) => {
     orderBy: [{ isSystem: "desc" }, { name: "asc" }],
   });
 
-  const formattedRoles = roles.map((role) => ({
+  const formattedRoles = roles.map((role: any) => ({
     id: role.id,
     key: role.key,
     name: role.name,
     description: role.description,
     isSystem: role.isSystem,
-    permissions: role.rolePermissions.map((rp) => rp.permission),
+    permissions: role.rolePermissions.map((rp: any) => rp.permission),
   }));
 
   return c.json({ roles: formattedRoles });
@@ -52,7 +55,7 @@ rbac.get("/roles", async (c) => {
  * GET /rbac/permissions
  * List all available permissions
  */
-rbac.get("/permissions", async (c) => {
+rbac.get("/permissions", async (c: Context) => {
   const permissions = await prisma.permission.findMany({
     orderBy: [{ category: "asc" }, { key: "asc" }],
   });
@@ -68,10 +71,10 @@ rbac.post(
   "/assign",
   requirePermission(PERMISSIONS.USERS_MANAGE),
   zValidator("json", AssignRolesSchema),
-  async (c) => {
-    const authCtx = c.get("auth");
+  async (c: Context) => {
+    const authCtx = c.get("auth") as AuthContext;
     const tenantId = authCtx.tenantId!;
-    const input = c.req.valid("json");
+    const input = c.req.valid("json") as z.infer<typeof AssignRolesSchema>;
 
     // Get membership
     const membership = await prisma.tenantMembership.findUnique({
@@ -102,7 +105,7 @@ rbac.post(
       throw new HTTPException(400, { message: "One or more invalid role IDs" });
     }
 
-    const previousRoleIds = membership.roles.map((r) => r.roleId);
+    const previousRoleIds = membership.roles.map((r: any) => r.roleId);
 
     await prisma.$transaction(async (tx) => {
       // Remove existing roles
@@ -112,7 +115,7 @@ rbac.post(
 
       // Assign new roles
       await tx.membershipRole.createMany({
-        data: input.roleIds.map((roleId) => ({
+        data: input.roleIds.map((roleId: string) => ({
           membershipId: membership.id,
           roleId,
         })),
@@ -143,8 +146,8 @@ rbac.post(
  * GET /rbac/my-permissions
  * Get current user's computed permissions for the active tenant
  */
-rbac.get("/my-permissions", async (c) => {
-  const authCtx = c.get("auth");
+rbac.get("/my-permissions", async (c: Context) => {
+  const authCtx = c.get("auth") as AuthContext;
 
   return c.json({
     permissions: Array.from(authCtx.permissions),

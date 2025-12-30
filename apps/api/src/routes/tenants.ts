@@ -1,9 +1,12 @@
 import { Hono } from "hono";
+import type { Context } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { HTTPException } from "hono/http-exception";
-import { InviteSchema, AcceptInviteSchema } from "@buildflow/shared";
-import { PERMISSIONS } from "@buildflow/shared";
+import { z } from "zod";
+import { InviteSchema, AcceptInviteSchema } from "../../../../packages/shared/src/tenant";
+import { PERMISSIONS } from "../../../../packages/shared/src/rbac";
 import { authMiddleware, tenantMiddleware, requirePermission } from "../middleware/auth";
+import type { AuthContext } from "../middleware/auth";
 import { generateInviteToken, hashPassword } from "../lib/password";
 import { createOutboxEvent, FOUNDATION_EVENTS } from "../lib/outbox";
 import { prisma } from "../lib/prisma";
@@ -21,8 +24,8 @@ tenants.get(
   "/members",
   tenantMiddleware,
   requirePermission(PERMISSIONS.USERS_READ),
-  async (c) => {
-    const authCtx = c.get("auth");
+  async (c: Context) => {
+    const authCtx = c.get("auth") as AuthContext;
     const tenantId = authCtx.tenantId!;
 
     const memberships = await prisma.tenantMembership.findMany({
@@ -34,14 +37,14 @@ tenants.get(
       orderBy: { createdAt: "desc" },
     });
 
-    const members = memberships.map((m) => ({
+    const members = memberships.map((m: any) => ({
       id: m.id,
       userId: m.user.id,
       userEmail: m.user.email,
       userName: m.user.name,
       userAvatarUrl: m.user.avatarUrl,
       status: m.status,
-      roles: m.roles.map((r) => r.role),
+      roles: m.roles.map((r: any) => r.role),
       createdAt: m.createdAt,
     }));
 
@@ -58,10 +61,10 @@ tenants.post(
   tenantMiddleware,
   requirePermission(PERMISSIONS.USERS_INVITE),
   zValidator("json", InviteSchema),
-  async (c) => {
-    const authCtx = c.get("auth");
+  async (c: Context) => {
+    const authCtx = c.get("auth") as AuthContext;
     const tenantId = authCtx.tenantId!;
-    const input = c.req.valid("json");
+    const input = c.req.valid("json") as z.infer<typeof InviteSchema>;
 
     // Check if user is already a member
     const existingUser = await prisma.user.findUnique({
@@ -150,8 +153,8 @@ const publicTenants = new Hono();
 publicTenants.post(
   "/accept-invite",
   zValidator("json", AcceptInviteSchema),
-  async (c) => {
-    const input = c.req.valid("json");
+  async (c: Context) => {
+    const input = c.req.valid("json") as z.infer<typeof AcceptInviteSchema>;
 
     const invitation = await prisma.tenantInvitation.findUnique({
       where: { token: input.token },
@@ -199,7 +202,7 @@ publicTenants.post(
 
       // Assign roles
       await tx.membershipRole.createMany({
-        data: invitation.roleIds.map((roleId) => ({
+        data: invitation.roleIds.map((roleId: string) => ({
           membershipId: membership.id,
           roleId,
         })),
@@ -247,8 +250,8 @@ tenants.get(
   "/invitations",
   tenantMiddleware,
   requirePermission(PERMISSIONS.USERS_INVITE),
-  async (c) => {
-    const authCtx = c.get("auth");
+  async (c: Context) => {
+    const authCtx = c.get("auth") as AuthContext;
     const tenantId = authCtx.tenantId!;
 
     const invitations = await prisma.tenantInvitation.findMany({
@@ -275,8 +278,8 @@ tenants.delete(
   "/invitations/:id",
   tenantMiddleware,
   requirePermission(PERMISSIONS.USERS_INVITE),
-  async (c) => {
-    const authCtx = c.get("auth");
+  async (c: Context) => {
+    const authCtx = c.get("auth") as AuthContext;
     const tenantId = authCtx.tenantId!;
     const invitationId = c.req.param("id");
 

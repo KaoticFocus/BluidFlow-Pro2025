@@ -106,7 +106,7 @@ export async function authMiddleware(c: Context, next: Next) {
  * Ensures request has a valid tenant context
  */
 export async function tenantMiddleware(c: Context, next: Next) {
-  const auth = c.get("auth");
+  const auth = c.get("auth") as AuthContext | undefined;
 
   if (!auth) {
     throw new HTTPException(401, { message: "Authentication required" });
@@ -133,7 +133,7 @@ export async function tenantMiddleware(c: Context, next: Next) {
  */
 export function requirePermission(...requiredPermissions: string[]) {
   return async (c: Context, next: Next) => {
-    const auth = c.get("auth");
+    const auth = c.get("auth") as AuthContext | undefined;
 
     if (!auth) {
       throw new HTTPException(401, { message: "Authentication required" });
