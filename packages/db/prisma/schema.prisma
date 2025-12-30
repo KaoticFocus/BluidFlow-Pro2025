@@ -366,6 +366,8 @@ model OutboxEvent {
 
   @@index([status, createdAt])
   @@index([tenantId, aggregateId])
+  @@index([status, attempts, createdAt]) // For relay worker query optimization
+  @@index([eventType, status]) // For event type filtering
   @@map("outbox_events")
 }
 
@@ -472,6 +474,10 @@ model Task {
   @@index([tenantId, status, updatedAt])
   @@index([tenantId, projectId])
   @@index([tenantId, parentTaskId])
+  @@index([tenantId, status, dueDate]) // For daily plan generation
+  @@index([tenantId, status, createdAt]) // For recent tasks query
+  @@index([tenantId, assignedToId, status]) // For assignee filtering
+  @@index([tenantId, type, status]) // For type filtering
   @@map("tasks")
 }
 

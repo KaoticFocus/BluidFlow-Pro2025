@@ -73,15 +73,26 @@ export async function relayOutboxEvents(): Promise<{
     let failed = 0;
     let skipped = 0;
 
-    // Find pending events
+    // Find pending events (optimized query with index)
     const events = await prisma.outboxEvent.findMany({
-    where: {
-      status: "pending",
-      attempts: { lt: MAX_ATTEMPTS },
-    },
-    take: BATCH_SIZE,
-    orderBy: { createdAt: "asc" },
-  });
+      where: {
+        status: "pending",
+        attempts: { lt: MAX_ATTEMPTS },
+      },
+      take: BATCH_SIZE,
+      orderBy: { createdAt: "asc" },
+      // Select only needed fields to reduce payload
+      select: {
+        id: true,
+        tenantId: true,
+        eventType: true,
+        aggregateId: true,
+        payload: true,
+        dedupeKey: true,
+        attempts: true,
+        createdAt: true,
+      },
+    });
 
   for (const event of events) {
     try {

@@ -9,6 +9,7 @@ import { idempotencyMiddleware } from "../middleware/idempotency";
 import { PERMISSIONS } from "../../../../packages/shared/src/rbac";
 import { prisma } from "../lib/prisma";
 import { createOutboxEvent } from "../lib/outbox";
+import { buildTaskWhereClause, buildDailyPlanTaskQuery, taskListSelect } from "../lib/query-optimization";
 
 const taskflowRoutes = new Hono();
 
@@ -153,10 +154,28 @@ taskflowRoutes.get("/tasks", async (c: Context) => {
   if (priority) where.priority = priority;
   if (assigneeId) where.assignedToId = assigneeId;
 
+  // Optimize query: use select to reduce payload size
   const tasks = await prisma.task.findMany({
     where,
     orderBy: { updatedAt: "desc" },
     take: 100, // Limit for MVP
+    select: {
+      id: true,
+      tenantId: true,
+      projectId: true,
+      source: true,
+      type: true,
+      status: true,
+      title: true,
+      description: true,
+      priority: true,
+      dueDate: true,
+      assignedToId: true,
+      aiGenerated: true,
+      createdAt: true,
+      updatedAt: true,
+      // Exclude parentTaskId for list view (not needed)
+    },
   });
 
   return c.json({
@@ -392,50 +411,26 @@ taskflowRoutes.post("/daily-plans/generate", zValidator("json", GenerateDailyPla
   const planDate = new Date(input.date);
   const planDateStr = input.date; // YYYY-MM-DD format
 
-  // Query tasks for daily plan generation
-  // 1. Tasks in TODO/IN_PROGRESS status due on/before the plan date
-  // 2. Recent approved AI-generated tasks
-  // 3. Backlog items (no due date, open status)
-  const where: any = {
-    tenantId,
-    type: { not: "checklist_item" }, // Exclude checklist items
-  };
+  // Use optimized query builder for daily plan generation
+  const where = buildDailyPlanTaskQuery(planDate, input.project_id || undefined);
+  where.tenantId = tenantId; // Ensure tenantId is set
 
-  if (input.project_id) {
-    where.projectId = input.project_id;
-  }
-
-  // Get tasks that should be included
+  // Get tasks that should be included (optimized query)
   const candidateTasks = await prisma.task.findMany({
-    where: {
-      ...where,
-      OR: [
-        // Tasks due on or before plan date
-        {
-          status: { in: ["open", "in_progress"] },
-          dueDate: { lte: planDate },
-        },
-        // Recent approved AI tasks (last 7 days)
-        {
-          status: "open",
-          aiGenerated: true,
-          createdAt: {
-            gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
-          },
-        },
-        // Backlog items (no due date, open)
-        {
-          status: "open",
-          dueDate: null,
-        },
-      ],
-    },
+    where,
     orderBy: [
       { priority: "desc" }, // High priority first
       { dueDate: "asc" }, // Due date ascending
       { createdAt: "desc" }, // Recent first
     ],
     take: 16, // Cap at 16 items
+    select: {
+      id: true,
+      dueDate: true,
+      status: true,
+      createdAt: true,
+      // Only select fields needed for metrics calculation
+    },
   });
 
   const taskIds = candidateTasks.map((task) => task.id);
