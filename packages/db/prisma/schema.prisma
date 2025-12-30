@@ -352,6 +352,7 @@ model Task {
   id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   tenantId    String   @map("tenant_id") @db.Uuid
   projectId   String?  @map("project_id") @db.Uuid
+  parentTaskId String? @map("parent_task_id") @db.Uuid // For checklist items
 
   source      String   // voice, photo, message, manual
   type        String   @default("general") // general, checklist_item, punch_item
@@ -376,6 +377,7 @@ model Task {
 
   @@index([tenantId, status, updatedAt])
   @@index([tenantId, projectId])
+  @@index([tenantId, parentTaskId])
   @@map("tasks")
 }
 

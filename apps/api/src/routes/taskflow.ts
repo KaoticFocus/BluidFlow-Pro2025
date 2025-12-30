@@ -440,4 +440,260 @@ taskflowRoutes.get("/daily-plans/:id", async (c: Context) => {
   });
 });
 
+// ============================================================================
+// CHECKLIST OPERATIONS
+// ============================================================================
+
+const CreateChecklistItemSchema = z.object({
+  title: z.string().min(1).max(140),
+  due_date: z.string().optional(),
+  assignee_id: z.string().uuid().optional(),
+});
+
+const UpdateChecklistItemSchema = z.object({
+  title: z.string().min(1).max(140).optional(),
+  status: z.enum(["open", "in_progress", "completed", "cancelled"]).optional(),
+  due_date: z.string().optional(),
+  assignee_id: z.string().uuid().optional(),
+});
+
+/**
+ * POST /taskflow/tasks/:id/checklist
+ * Create a checklist item for a task
+ */
+taskflowRoutes.post(
+  "/tasks/:id/checklist",
+  zValidator("json", CreateChecklistItemSchema),
+  async (c: Context) => {
+    const authCtx = c.get("auth") as AuthContext;
+    const tenantId = authCtx.tenantId!;
+    const taskId = c.req.param("id");
+    const input = c.req.valid("json") as z.infer<typeof CreateChecklistItemSchema>;
+
+    // Verify parent task exists and user has access
+    const parentTask = await prisma.task.findFirst({
+      where: {
+        id: taskId,
+        tenantId,
+      },
+    });
+
+    if (!parentTask) {
+      throw new HTTPException(404, { message: "Task not found" });
+    }
+
+    const checklistItem = await prisma.$transaction(async (tx) => {
+      // Create checklist item as a task with type="checklist_item"
+      const item = await tx.task.create({
+        data: {
+          tenantId,
+          parentTaskId: taskId,
+          projectId: parentTask.projectId,
+          source: "manual",
+          type: "checklist_item",
+          status: "open",
+          title: input.title,
+          priority: parentTask.priority,
+          dueDate: input.due_date ? new Date(input.due_date) : null,
+          assignedToId: input.assignee_id || null,
+          createdById: authCtx.user.id,
+        },
+      });
+
+      // Emit event
+      await tx.outboxEvent.create({
+        data: createOutboxEvent({
+          tenantId,
+          eventType: "task.checklist_item.created.v1",
+          aggregateId: item.id,
+          actorUserId: authCtx.user.id,
+          payload: {
+            taskId,
+            checklistItemId: item.id,
+            title: input.title,
+          },
+        }),
+      });
+
+      return item;
+    });
+
+    return c.json({
+      checklist_item: {
+        id: checklistItem.id,
+        task_id: taskId,
+        title: checklistItem.title,
+        status: checklistItem.status,
+        due_date: checklistItem.dueDate?.toISOString() || null,
+        assignee_id: checklistItem.assignedToId,
+        created_at: checklistItem.createdAt.toISOString(),
+      },
+    }, 201);
+  }
+);
+
+/**
+ * PATCH /taskflow/tasks/:id/checklist/:itemId
+ * Update a checklist item
+ */
+taskflowRoutes.patch(
+  "/tasks/:id/checklist/:itemId",
+  zValidator("json", UpdateChecklistItemSchema),
+  async (c: Context) => {
+    const authCtx = c.get("auth") as AuthContext;
+    const tenantId = authCtx.tenantId!;
+    const taskId = c.req.param("id");
+    const itemId = c.req.param("itemId");
+    const input = c.req.valid("json") as z.infer<typeof UpdateChecklistItemSchema>;
+
+    // Verify parent task exists
+    const parentTask = await prisma.task.findFirst({
+      where: {
+        id: taskId,
+        tenantId,
+      },
+    });
+
+    if (!parentTask) {
+      throw new HTTPException(404, { message: "Task not found" });
+    }
+
+    // Verify checklist item exists and belongs to task
+    const checklistItem = await prisma.task.findFirst({
+      where: {
+        id: itemId,
+        tenantId,
+        parentTaskId: taskId,
+        type: "checklist_item",
+      },
+    });
+
+    if (!checklistItem) {
+      throw new HTTPException(404, { message: "Checklist item not found" });
+    }
+
+    const updateData: any = {};
+    if (input.title !== undefined) updateData.title = input.title;
+    if (input.status !== undefined) updateData.status = input.status;
+    if (input.due_date !== undefined) updateData.dueDate = input.due_date ? new Date(input.due_date) : null;
+    if (input.assignee_id !== undefined) updateData.assignedToId = input.assignee_id;
+
+    const result = await prisma.$transaction(async (tx) => {
+      const updatedItem = await tx.task.update({
+        where: { id: itemId },
+        data: updateData,
+      });
+
+      // Check if all checklist items are completed
+      if (input.status === "completed") {
+        const allItems = await tx.task.findMany({
+          where: {
+            parentTaskId: taskId,
+            tenantId,
+            type: "checklist_item",
+          },
+        });
+
+        const allCompleted = allItems.every((item) => item.status === "completed");
+        
+        if (allCompleted && parentTask.status !== "completed") {
+          // Auto-complete parent task
+          await tx.task.update({
+            where: { id: taskId },
+            data: { status: "completed" },
+          });
+
+          // Emit task completion event
+          await tx.outboxEvent.create({
+            data: createOutboxEvent({
+              tenantId,
+              eventType: "task.completed.v1",
+              aggregateId: taskId,
+              actorUserId: authCtx.user.id,
+              payload: {
+                taskId,
+                autoCompleted: true,
+                reason: "All checklist items completed",
+              },
+            }),
+          });
+        }
+      }
+
+      // Emit checklist item update event
+      await tx.outboxEvent.create({
+        data: createOutboxEvent({
+          tenantId,
+          eventType: "task.checklist_item.updated.v1",
+          aggregateId: itemId,
+          actorUserId: authCtx.user.id,
+          payload: {
+            taskId,
+            checklistItemId: itemId,
+            changes: input,
+          },
+        }),
+      });
+
+      return updatedItem;
+    });
+
+    return c.json({
+      checklist_item: {
+        id: result.id,
+        task_id: taskId,
+        title: result.title,
+        status: result.status,
+        due_date: result.dueDate?.toISOString() || null,
+        assignee_id: result.assignedToId,
+        updated_at: result.updatedAt.toISOString(),
+      },
+    });
+  }
+);
+
+/**
+ * GET /taskflow/tasks/:id/checklist
+ * Get all checklist items for a task
+ */
+taskflowRoutes.get("/tasks/:id/checklist", async (c: Context) => {
+  const authCtx = c.get("auth") as AuthContext;
+  const tenantId = authCtx.tenantId!;
+  const taskId = c.req.param("id");
+
+  // Verify parent task exists
+  const parentTask = await prisma.task.findFirst({
+    where: {
+      id: taskId,
+      tenantId,
+    },
+  });
+
+  if (!parentTask) {
+    throw new HTTPException(404, { message: "Task not found" });
+  }
+
+  const checklistItems = await prisma.task.findMany({
+    where: {
+      parentTaskId: taskId,
+      tenantId,
+      type: "checklist_item",
+    },
+    orderBy: { createdAt: "asc" },
+  });
+
+  return c.json({
+    checklist_items: checklistItems.map((item) => ({
+      id: item.id,
+      task_id: taskId,
+      title: item.title,
+      status: item.status,
+      due_date: item.dueDate?.toISOString() || null,
+      assignee_id: item.assignedToId,
+      created_at: item.createdAt.toISOString(),
+      updated_at: item.updatedAt.toISOString(),
+    })),
+  });
+});
+
 export { taskflowRoutes };
