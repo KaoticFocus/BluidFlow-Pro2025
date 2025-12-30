@@ -6,6 +6,7 @@
 import { prisma } from "./prisma";
 import { createHash } from "node:crypto";
 import { randomUUID } from "node:crypto";
+import { withSpan, addSpanAttributes } from "./otel";
 
 const BATCH_SIZE = 15;
 const MAX_ATTEMPTS = 10;
@@ -67,12 +68,13 @@ export async function relayOutboxEvents(): Promise<{
   failed: number;
   skipped: number;
 }> {
-  let processed = 0;
-  let failed = 0;
-  let skipped = 0;
+  return await withSpan("event.relay.process_batch", async (span) => {
+    let processed = 0;
+    let failed = 0;
+    let skipped = 0;
 
-  // Find pending events
-  const events = await prisma.outboxEvent.findMany({
+    // Find pending events
+    const events = await prisma.outboxEvent.findMany({
     where: {
       status: "pending",
       attempts: { lt: MAX_ATTEMPTS },
@@ -240,7 +242,15 @@ export async function relayOutboxEvents(): Promise<{
     }
   }
 
-  return { processed, failed, skipped };
+    span.setAttributes({
+      "event.relay.processed": processed,
+      "event.relay.failed": failed,
+      "event.relay.skipped": skipped,
+      "event.relay.batch_size": events.length,
+    });
+
+    return { processed, failed, skipped };
+  });
 }
 
 /**

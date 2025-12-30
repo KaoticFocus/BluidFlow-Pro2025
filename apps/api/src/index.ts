@@ -4,6 +4,7 @@ import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { secureHeaders } from "hono/secure-headers";
 import { HTTPException } from "hono/http-exception";
+import { initializeOpenTelemetry, shutdownOpenTelemetry } from "./lib/otel";
 
 // Routes
 import { auth } from "./routes/auth";
@@ -16,6 +17,13 @@ import { meetings } from "./routes/meetings";
 import { internalEvents } from "./routes/internal/events";
 
 const app = new Hono();
+
+// ============================================================================
+// OpenTelemetry Initialization
+// ============================================================================
+
+// Initialize OpenTelemetry (only if enabled)
+initializeOpenTelemetry();
 
 // ============================================================================
 // Global Middleware

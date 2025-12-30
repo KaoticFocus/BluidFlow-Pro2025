@@ -10,6 +10,7 @@
  */
 
 import { prisma } from "../../lib/prisma";
+import { withSpan, addSpanAttributes } from "../../lib/otel";
 
 export interface ConsumerConfig {
   name: string;
@@ -76,8 +77,9 @@ export abstract class BaseConsumer {
     status: string;
     attempts: number;
     sequence: bigint;
+    lastError?: string | null;
   } | null> {
-    return await prisma.consumerEvent.findUnique({
+    return await (prisma as any).consumerEvent.findUnique({
       where: {
         consumerName_eventId: {
           consumerName: this.config.name,
@@ -91,7 +93,7 @@ export abstract class BaseConsumer {
    * Mark event as processing
    */
   protected async markProcessing(eventId: string, sequence: bigint): Promise<void> {
-    await prisma.consumerEvent.upsert({
+    await (prisma as any).consumerEvent.upsert({
       where: {
         consumerName_eventId: {
           consumerName: this.config.name,
@@ -117,7 +119,7 @@ export abstract class BaseConsumer {
    * Mark event as completed
    */
   protected async markCompleted(eventId: string): Promise<void> {
-    await prisma.consumerEvent.update({
+    await (prisma as any).consumerEvent.update({
       where: {
         consumerName_eventId: {
           consumerName: this.config.name,
@@ -140,7 +142,7 @@ export abstract class BaseConsumer {
     error: string,
     moveToDLQ: boolean
   ): Promise<void> {
-    const consumerEvent = await prisma.consumerEvent.findUnique({
+    const consumerEvent = await (prisma as any).consumerEvent.findUnique({
       where: {
         consumerName_eventId: {
           consumerName: this.config.name,
@@ -155,14 +157,14 @@ export abstract class BaseConsumer {
 
     if (moveToDLQ) {
       // Get event log entry
-      const eventLog = await prisma.eventLog.findUnique({
+      const eventLog = await (prisma as any).eventLog.findUnique({
         where: { eventId },
       });
 
       if (eventLog) {
         // Move to DLQ
         await prisma.$transaction(async (tx) => {
-          await tx.dLQMessage.create({
+          await (tx as any).dLQMessage.create({
             data: {
               consumerName: this.config.name,
               eventId,
@@ -172,7 +174,7 @@ export abstract class BaseConsumer {
             },
           });
 
-          await tx.consumerEvent.update({
+          await (tx as any).consumerEvent.update({
             where: {
               consumerName_eventId: {
                 consumerName: this.config.name,
@@ -188,7 +190,7 @@ export abstract class BaseConsumer {
       }
     } else {
       // Just mark as failed, will retry
-      await prisma.consumerEvent.update({
+      await (prisma as any).consumerEvent.update({
         where: {
           consumerName_eventId: {
             consumerName: this.config.name,
@@ -207,7 +209,7 @@ export abstract class BaseConsumer {
    * Get last checkpoint sequence for this consumer
    */
   protected async getLastCheckpoint(): Promise<bigint> {
-    const lastEvent = await prisma.consumerEvent.findFirst({
+    const lastEvent = await (prisma as any).consumerEvent.findFirst({
       where: {
         consumerName: this.config.name,
         status: "completed",
@@ -227,12 +229,19 @@ export abstract class BaseConsumer {
       return;
     }
 
-    try {
-      // Get last checkpoint
-      const lastSequence = this.lastCheckpoint || (await this.getLastCheckpoint());
+    return await withSpan(`consumer.${this.config.name}.poll`, async (span) => {
+      try {
+        addSpanAttributes({
+          "consumer.name": this.config.name,
+          "consumer.schema_prefix": this.config.schemaIdPrefix,
+        });
 
-      // Find events after checkpoint that match subscription
-      const events = await prisma.eventLog.findMany({
+        // Get last checkpoint
+        const lastSequence = this.lastCheckpoint || (await this.getLastCheckpoint());
+        span.setAttribute("consumer.checkpoint", lastSequence.toString());
+
+        // Find events after checkpoint that match subscription
+        const events = await (prisma as any).eventLog.findMany({
         where: {
           sequence: { gt: lastSequence },
           schemaId: { startsWith: this.config.schemaIdPrefix },
@@ -241,75 +250,97 @@ export abstract class BaseConsumer {
         take: this.config.batchSize,
       });
 
-      for (const event of events) {
-        try {
-          // Check if already processed (idempotency)
-          const consumerEvent = await this.getConsumerEvent(event.eventId);
+        span.setAttribute("consumer.events_found", events.length);
 
-          if (consumerEvent?.status === "completed") {
-            // Already processed, update checkpoint
-            this.lastCheckpoint = event.sequence;
-            continue;
-          }
+        for (const event of events) {
+          await withSpan(`consumer.${this.config.name}.process_event`, async (eventSpan) => {
+            try {
+              eventSpan.setAttributes({
+                "event.id": event.eventId,
+                "event.sequence": event.sequence.toString(),
+                "event.schema_id": event.schemaId,
+                "event.tenant_id": event.tenantId,
+              });
 
-          // Check if should retry (exponential backoff)
-          if (consumerEvent && consumerEvent.attempts >= this.config.maxAttempts) {
-            // Move to DLQ
-            await this.markFailed(
-              event.eventId,
-              event.sequence,
-              consumerEvent.lastError || "Max attempts exceeded",
-              true
-            );
-            continue;
-          }
+              // Check if already processed (idempotency)
+              const consumerEvent = await this.getConsumerEvent(event.eventId);
 
-          // Mark as processing
-          await this.markProcessing(event.eventId, event.sequence);
+              if (consumerEvent?.status === "completed") {
+                // Already processed, update checkpoint
+                this.lastCheckpoint = event.sequence;
+                eventSpan.setAttribute("event.status", "skipped_already_processed");
+                return;
+              }
 
-          // Process event
-          const result = await this.processEvent({
-            sequence: event.sequence,
-            eventId: event.eventId,
-            tenantId: event.tenantId,
-            schemaId: event.schemaId,
-            schemaVersion: event.schemaVersion,
-            headers: event.headers as any,
-            payloadRedacted: event.payloadRedacted as any,
-            payloadHash: event.payloadHash,
-            publishedAt: event.publishedAt,
-          });
+              // Check if should retry (exponential backoff)
+              if (consumerEvent && consumerEvent.attempts >= this.config.maxAttempts) {
+                // Move to DLQ
+                await this.markFailed(
+                  event.eventId,
+                  event.sequence,
+                  (consumerEvent as any).lastError || "Max attempts exceeded",
+                  true
+                );
+                eventSpan.setAttribute("event.status", "moved_to_dlq");
+                return;
+              }
 
-          if (result.success) {
-            // Mark as completed
-            await this.markCompleted(event.eventId);
-            this.lastCheckpoint = event.sequence;
-          } else {
-            // Mark as failed
-            const shouldRetry = result.shouldRetry !== false;
-            const attempts = consumerEvent?.attempts || 1;
-            const moveToDLQ = attempts >= this.config.maxAttempts;
+              // Mark as processing
+              await this.markProcessing(event.eventId, event.sequence);
 
-            await this.markFailed(event.eventId, event.sequence, result.error || "Processing failed", moveToDLQ);
+              // Process event
+              const result = await this.processEvent({
+                sequence: event.sequence,
+                eventId: event.eventId,
+                tenantId: event.tenantId,
+                schemaId: event.schemaId,
+                schemaVersion: event.schemaVersion,
+                headers: event.headers as any,
+                payloadRedacted: event.payloadRedacted as any,
+                payloadHash: event.payloadHash,
+                publishedAt: event.publishedAt,
+              });
 
-            if (!moveToDLQ && shouldRetry) {
-              // Will retry on next poll (with exponential backoff)
-              // Delay is handled by poll interval
+              if (result.success) {
+                // Mark as completed
+                await this.markCompleted(event.eventId);
+                this.lastCheckpoint = event.sequence;
+                eventSpan.setAttribute("event.status", "completed");
+              } else {
+                // Mark as failed
+                const shouldRetry = result.shouldRetry !== false;
+                const attempts = consumerEvent?.attempts || 1;
+                const moveToDLQ = attempts >= this.config.maxAttempts;
+
+                await this.markFailed(event.eventId, event.sequence, result.error || "Processing failed", moveToDLQ);
+
+                eventSpan.setAttributes({
+                  "event.status": moveToDLQ ? "failed_dlq" : "failed_retry",
+                  "event.attempts": attempts,
+                });
+
+                if (!moveToDLQ && shouldRetry) {
+                  // Will retry on next poll (with exponential backoff)
+                  // Delay is handled by poll interval
+                }
+              }
+            } catch (error) {
+              console.error(`[${this.config.name}] Error processing event ${event.eventId}:`, error);
+              eventSpan.recordException(error instanceof Error ? error : new Error(String(error)));
+              await this.markFailed(
+                event.eventId,
+                event.sequence,
+                error instanceof Error ? error.message : String(error),
+                false
+              );
             }
-          }
-        } catch (error) {
-          console.error(`[${this.config.name}] Error processing event ${event.eventId}:`, error);
-          await this.markFailed(
-            event.eventId,
-            event.sequence,
-            error instanceof Error ? error.message : String(error),
-            false
-          );
+          });
         }
+      } catch (error) {
+        console.error(`[${this.config.name}] Error in poll cycle:`, error);
+        span.recordException(error instanceof Error ? error : new Error(String(error)));
       }
-    } catch (error) {
-      console.error(`[${this.config.name}] Error in poll cycle:`, error);
-    }
+    });
   }
 
   /**
@@ -372,14 +403,14 @@ export abstract class BaseConsumer {
       where.sequence.lte = toSequence;
     }
 
-    const events = await prisma.eventLog.findMany({
+    const events = await (prisma as any).eventLog.findMany({
       where,
       orderBy: { sequence: "asc" },
     });
 
     for (const event of events) {
       // Reset consumer event to allow reprocessing
-      await prisma.consumerEvent.deleteMany({
+      await (prisma as any).consumerEvent.deleteMany({
         where: {
           consumerName: this.config.name,
           eventId: event.eventId,
