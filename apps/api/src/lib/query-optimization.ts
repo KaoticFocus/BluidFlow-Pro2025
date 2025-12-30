@@ -47,9 +47,8 @@ export function buildTaskWhereClause(
 export function buildDailyPlanTaskQuery(
   planDate: Date,
   projectId?: string
-): Prisma.TaskWhereInput {
-  const baseWhere: Prisma.TaskWhereInput = {
-    tenantId,
+): Omit<Prisma.TaskWhereInput, "tenantId"> {
+  const baseWhere: Omit<Prisma.TaskWhereInput, "tenantId"> = {
     type: { not: "checklist_item" }, // Exclude checklist items
   };
 
