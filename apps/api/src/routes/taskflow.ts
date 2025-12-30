@@ -412,8 +412,11 @@ taskflowRoutes.post("/daily-plans/generate", zValidator("json", GenerateDailyPla
   const planDateStr = input.date; // YYYY-MM-DD format
 
   // Use optimized query builder for daily plan generation
-  const where = buildDailyPlanTaskQuery(planDate, input.project_id || undefined);
-  where.tenantId = tenantId; // Ensure tenantId is set
+  const baseWhere = buildDailyPlanTaskQuery(planDate, input.project_id || undefined);
+  const where = {
+    ...baseWhere,
+    tenantId, // Ensure tenantId is set
+  } as any;
 
   // Get tasks that should be included (optimized query)
   const candidateTasks = await prisma.task.findMany({

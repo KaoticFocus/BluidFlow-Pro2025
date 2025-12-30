@@ -5,8 +5,7 @@ import { logger } from "hono/logger";
 import { secureHeaders } from "hono/secure-headers";
 import { HTTPException } from "hono/http-exception";
 import { initializeOpenTelemetry, shutdownOpenTelemetry } from "./lib/otel";
-import { initializeSentry } from "./lib/sentry";
-import { captureException, setUserContext, setContext } from "./lib/sentry";
+import { initializeSentry, captureException, setUserContext, setContext } from "./lib/sentry";
 import { logger } from "./lib/logger";
 
 // Routes
