@@ -127,17 +127,24 @@ export async function relayOutboxEvents(): Promise<{
 
       // Extract headers from payload (traceId, correlationId, actorUserId)
       const payload = event.payload as any;
-      const headers = {
+      
+      // Redact PII from payload
+      const { redacted: payloadRedacted, piiTags } = redactPayload(payload);
+      
+      // Build headers with PII tags
+      const headers: Record<string, any> = {
         traceId: payload.traceId || null,
         correlationId: payload.correlationId || null,
         actorUserId: payload.actorUserId || null,
         tenantId: event.tenantId,
       };
+      
+      // Add PII tags to headers if PII was detected
+      if (piiTags.length > 0) {
+        headers.pii_tags = piiTags;
+      }
 
-      // Redact payload for privacy
-      const payloadRedacted = redactPayload(payload);
-
-      // Calculate payload hash
+      // Calculate payload hash (from original payload for verification)
       const payloadHash = createHash("sha256")
         .update(JSON.stringify(payload))
         .digest("hex");
@@ -191,6 +198,13 @@ export async function relayOutboxEvents(): Promise<{
             schemaId = "system.error";
           }
 
+          // Redact payload for DLQ entry
+          const { redacted: dlqPayloadRedacted, piiTags: dlqPIITags } = redactPayload(event.payload);
+          const dlqHeaders: Record<string, any> = {};
+          if (dlqPIITags.length > 0) {
+            dlqHeaders.pii_tags = dlqPIITags;
+          }
+
           // Create event log entry for DLQ reference (even if incomplete)
           const eventLog = await tx.eventLog.create({
             data: {
@@ -198,8 +212,8 @@ export async function relayOutboxEvents(): Promise<{
               tenantId: event.tenantId,
               schemaId,
               schemaVersion: version,
-              headers: {},
-              payloadRedacted: redactPayload(event.payload),
+              headers: dlqHeaders,
+              payloadRedacted: dlqPayloadRedacted,
               payloadHash: createHash("sha256")
                 .update(JSON.stringify(event.payload))
                 .digest("hex"),
