@@ -106,6 +106,12 @@ app.route("/v1/meetings", meetings);
 // Internal service routes (require service auth)
 app.route("/internal", internalEvents);
 
+// API Documentation routes
+app.route("/docs", docs);
+
+// Register OpenAPI paths (must be after routes are defined)
+registerOpenApiPaths();
+
 // ============================================================================
 // Error Handling
 // ============================================================================
