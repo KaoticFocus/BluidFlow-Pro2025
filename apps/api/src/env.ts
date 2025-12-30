@@ -15,3 +15,8 @@ export function requireEnv(name: string): string {
 // Use this in future OpenAI integrations (packages/ai or API routes/jobs).
 export const OPENAI_API_KEY = () => requireEnv("OPENAI_API_KEY");
 
+// Supabase configuration
+export const SUPABASE_URL = () => requireEnv("SUPABASE_URL");
+export const SUPABASE_SERVICE_ROLE_KEY = () => requireEnv("SUPABASE_SERVICE_ROLE_KEY");
+export const SUPABASE_ANON_KEY = () => requireEnv("SUPABASE_ANON_KEY");
+

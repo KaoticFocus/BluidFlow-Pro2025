@@ -1,5 +1,8 @@
 import type { Context, Next } from "hono";
 import { HTTPException } from "hono/http-exception";
+import { validateSupabaseToken } from "../lib/supabase-server";
+import { getOrCreateUserFromSupabase } from "../lib/supabase-sync";
+import { prisma } from "../lib/prisma";
 
 // Types for auth context
 export interface AuthUser {
@@ -32,7 +35,7 @@ declare module "hono" {
 
 /**
  * Authentication middleware
- * Validates session token and populates auth context
+ * Validates Supabase JWT token and populates auth context with Prisma data
  */
 export async function authMiddleware(c: Context, next: Next) {
   // Get token from cookie or Authorization header
@@ -44,30 +47,50 @@ export async function authMiddleware(c: Context, next: Next) {
     throw new HTTPException(401, { message: "Authentication required" });
   }
 
-  // TODO: Replace with actual database lookup via Prisma
-  // For now, return a placeholder that will be replaced with real implementation
-  const session = await validateSessionToken(token);
+  // Validate Supabase JWT token
+  const supabaseUser = await validateSupabaseToken(token);
   
-  if (!session) {
+  if (!supabaseUser) {
     throw new HTTPException(401, { message: "Invalid or expired session" });
   }
 
-  // Get tenant from header or session
+  // Sync user to Prisma (ensures they exist in our database)
+  const user = await getOrCreateUserFromSupabase(supabaseUser);
+
+  // Get tenant from header or find user's first active tenant
   const headerTenantId = c.req.header("X-Tenant-ID");
-  const tenantId = headerTenantId || session.activeTenantId;
+  let tenantId = headerTenantId || null;
+
+  // If no tenant in header, get user's first active membership
+  if (!tenantId) {
+    const membership = await prisma.tenantMembership.findFirst({
+      where: {
+        userId: user.id,
+        status: "active",
+      },
+      select: { tenantId: true },
+    });
+    tenantId = membership?.tenantId || null;
+  }
 
   // Load user permissions for the tenant
   const permissions = tenantId 
-    ? await loadUserPermissions(session.userId, tenantId)
+    ? await loadUserPermissions(user.id, tenantId)
     : new Set<string>();
 
+  // Create a session-like object (Supabase handles sessions, but we track tenant context)
   const authContext: AuthContext = {
-    user: session.user,
+    user: {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      isPlatformAdmin: user.isPlatformAdmin,
+    },
     session: {
-      id: session.id,
-      userId: session.userId,
-      activeTenantId: session.activeTenantId,
-      expiresAt: session.expiresAt,
+      id: supabaseUser.id, // Use Supabase user ID as session ID
+      userId: user.id,
+      activeTenantId: tenantId,
+      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days (Supabase manages expiry)
     },
     tenantId,
     permissions,
@@ -145,20 +168,37 @@ export async function optionalAuthMiddleware(c: Context, next: Next) {
     const token = cookieToken || bearerToken;
 
     if (token) {
-      const session = await validateSessionToken(token);
-      if (session) {
-        const tenantId = c.req.header("X-Tenant-ID") || session.activeTenantId;
+      const supabaseUser = await validateSupabaseToken(token);
+      if (supabaseUser) {
+        const user = await getOrCreateUserFromSupabase(supabaseUser);
+        const headerTenantId = c.req.header("X-Tenant-ID");
+        
+        // Get user's first active tenant if no header
+        let tenantId = headerTenantId || null;
+        if (!tenantId) {
+          const membership = await prisma.tenantMembership.findFirst({
+            where: { userId: user.id, status: "active" },
+            select: { tenantId: true },
+          });
+          tenantId = membership?.tenantId || null;
+        }
+
         const permissions = tenantId 
-          ? await loadUserPermissions(session.userId, tenantId)
+          ? await loadUserPermissions(user.id, tenantId)
           : new Set<string>();
 
         c.set("auth", {
-          user: session.user,
+          user: {
+            id: user.id,
+            email: user.email,
+            name: user.name,
+            isPlatformAdmin: user.isPlatformAdmin,
+          },
           session: {
-            id: session.id,
-            userId: session.userId,
-            activeTenantId: session.activeTenantId,
-            expiresAt: session.expiresAt,
+            id: supabaseUser.id,
+            userId: user.id,
+            activeTenantId: tenantId,
+            expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
           },
           tenantId,
           permissions,
@@ -173,41 +213,87 @@ export async function optionalAuthMiddleware(c: Context, next: Next) {
 }
 
 // ============================================================================
-// PLACEHOLDER FUNCTIONS - Replace with Prisma implementation
+// PRISMA-BASED IMPLEMENTATIONS
 // ============================================================================
 
-interface SessionWithUser {
-  id: string;
-  userId: string;
-  activeTenantId: string | null;
-  expiresAt: Date;
-  user: AuthUser;
-}
-
-async function validateSessionToken(token: string): Promise<SessionWithUser | null> {
-  // TODO: Implement actual session validation with Prisma
-  // This is a placeholder that will be replaced
-  console.log("validateSessionToken called with:", token.substring(0, 10) + "...");
-  return null;
-}
-
+/**
+ * Load user permissions for a tenant
+ * Queries: membership -> roles -> role_permissions -> permissions
+ * Also considers permission_overrides
+ */
 async function loadUserPermissions(userId: string, tenantId: string): Promise<Set<string>> {
-  // TODO: Implement actual permission loading with Prisma
-  // Query: membership -> roles -> role_permissions -> permissions
-  // Also consider permission_overrides
-  console.log("loadUserPermissions called for:", userId, tenantId);
-  return new Set<string>();
+  // Get user's membership in this tenant
+  const membership = await prisma.tenantMembership.findUnique({
+    where: {
+      tenantId_userId: {
+        tenantId,
+        userId,
+      },
+    },
+    include: {
+      roles: {
+        include: {
+          role: {
+            include: {
+              rolePermissions: {
+                include: {
+                  permission: true,
+                },
+              },
+            },
+          },
+        },
+      },
+      permissionOverrides: {
+        include: {
+          permission: true,
+        },
+      },
+    },
+  });
+
+  if (!membership) {
+    return new Set<string>();
+  }
+
+  const permissions = new Set<string>();
+
+  // Add permissions from roles
+  for (const membershipRole of membership.roles) {
+    for (const rolePermission of membershipRole.role.rolePermissions) {
+      permissions.add(rolePermission.permission.key);
+    }
+  }
+
+  // Apply permission overrides (deny takes precedence)
+  for (const override of membership.permissionOverrides) {
+    if (override.granted) {
+      permissions.add(override.permission.key);
+    } else {
+      permissions.delete(override.permission.key);
+    }
+  }
+
+  return permissions;
 }
 
+/**
+ * Verify user has active membership in tenant
+ */
 async function verifyTenantMembership(userId: string, tenantId: string): Promise<boolean> {
-  // TODO: Implement actual membership verification with Prisma
-  console.log("verifyTenantMembership called for:", userId, tenantId);
-  return false;
+  const membership = await prisma.tenantMembership.findUnique({
+    where: {
+      tenantId_userId: {
+        tenantId,
+        userId,
+      },
+    },
+  });
+
+  return membership?.status === "active" || false;
 }
 
 export {
-  validateSessionToken,
   loadUserPermissions,
   verifyTenantMembership,
 };
-

@@ -82,11 +82,11 @@ app.route("/ai", ai);
 // Consent routes
 app.route("/consents", consents);
 
-// TaskFlow routes (existing)
-app.route("/api/taskflow", taskflowRoutes);
+// TaskFlow routes
+app.route("/v1/taskflow", taskflowRoutes);
 
 // MeetingFlow routes
-app.route("/meetings", meetings);
+app.route("/v1/meetings", meetings);
 
 // ============================================================================
 // Error Handling

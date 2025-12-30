@@ -9,6 +9,11 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@buildflow/db": "workspace:*",
+    "@buildflow/shared": "workspace:*",
+    "@buildflow/events": "workspace:*",
+    "@hono/zod-validator": "^1.3.1",
+    "@supabase/supabase-js": "^2.47.10",
     "hono": "^4.6.14",
     "zod": "^3.23.8"
   },

@@ -1,111 +1,441 @@
 import { Hono } from "hono";
+import { zValidator } from "@hono/zod-validator";
+import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
-import { randomUUID } from "node:crypto";
+import { authMiddleware, tenantMiddleware, requirePermission } from "../middleware/auth";
+import { PERMISSIONS } from "@buildflow/shared";
+import { prisma } from "../lib/prisma";
+import { createOutboxEvent } from "../lib/outbox";
 
-// Minimal TaskFlow-Pro API scaffold.
-// NOTE: This is intentionally "storage-less" for now; next step is to wire Prisma + auth/tenant/RBAC.
+const taskflowRoutes = new Hono();
 
-export const taskflowRouter = new Hono();
+// All routes require authentication and tenant context
+taskflowRoutes.use("*", authMiddleware, tenantMiddleware);
+
+// ============================================================================
+// UPLOADS
+// ============================================================================
 
 const UploadPresignBodySchema = z.object({
   type: z.enum(["audio", "image"]),
   mime_type: z.string().min(1),
-  size_bytes: z.number().int().positive()
+  size_bytes: z.number().int().positive(),
 });
 
-taskflowRouter.post("/uploads/presign", async (c: any) => {
-  const body = UploadPresignBodySchema.safeParse(await c.req.json().catch(() => null));
-  if (!body.success) return c.json({ error: "invalid_body", details: body.error.flatten() }, 400);
+taskflowRoutes.post("/uploads/presign", zValidator("json", UploadPresignBodySchema), async (c) => {
+  const authCtx = c.get("auth");
+  const tenantId = authCtx.tenantId!;
+  const input = c.req.valid("json");
 
-  // TODO: issue a real presigned URL (R2/S3). For now return stub fields.
+  // TODO: Issue a real presigned URL (R2/S3)
+  // For now return stub fields
+  const attachmentId = crypto.randomUUID();
+  
   return c.json({
-    upload_url: "https://example.invalid/presign",
-    attachment_id: randomUUID(),
-    expires_at: new Date(Date.now() + 5 * 60_000).toISOString()
+    upload_url: `https://storage.example.com/presign/${attachmentId}`,
+    attachment_id: attachmentId,
+    expires_at: new Date(Date.now() + 5 * 60_000).toISOString(),
   });
 });
 
+// ============================================================================
+// TASKS
+// ============================================================================
+
 const CreateTaskBodySchema = z.object({
-  org_id: z.string().min(1),
-  project_id: z.string().min(1).optional(),
-  source: z.enum(["text", "voice", "photo"]),
+  project_id: z.string().uuid().optional(),
+  source: z.enum(["text", "voice", "photo", "manual"]),
   title: z.string().max(140).optional(),
   description: z.string().max(5000).optional(),
-  attachment_id: z.string().min(1).optional(),
+  attachment_id: z.string().uuid().optional(),
+  checklist: z.array(z.object({
+    title: z.string().max(140),
+    due_date: z.string().optional(),
+    assignee_id: z.string().uuid().optional(),
+  })).optional(),
+  tags: z.array(z.string().max(50)).max(10).optional(),
   type: z.enum(["general", "punch"]).optional(),
-  consent: z.boolean().optional()
+  priority: z.enum(["low", "normal", "high", "urgent"]).optional(),
+  due_date: z.string().optional(),
+  assignee_id: z.string().uuid().optional(),
+  consent: z.boolean().optional(),
 });
 
-taskflowRouter.post("/tasks", async (c: any) => {
-  const body = CreateTaskBodySchema.safeParse(await c.req.json().catch(() => null));
-  if (!body.success) return c.json({ error: "invalid_body", details: body.error.flatten() }, 400);
+taskflowRoutes.post("/tasks", zValidator("json", CreateTaskBodySchema), async (c) => {
+  const authCtx = c.get("auth");
+  const tenantId = authCtx.tenantId!;
+  const input = c.req.valid("json");
 
-  const now = new Date().toISOString();
-  const taskId = randomUUID();
-
-  const isAiSource = body.data.source === "voice" || body.data.source === "photo";
+  const isAiSource = input.source === "voice" || input.source === "photo";
   const status = isAiSource ? "pending_approval" : "open";
 
-  return c.json(
-    {
-      task: {
-        id: taskId,
-        org_id: body.data.org_id,
-        project_id: body.data.project_id ?? null,
-        source: body.data.source,
-        title: body.data.title ?? "(untitled)",
-        description_redacted: body.data.description ?? "",
-        type: body.data.type ?? "general",
+  const task = await prisma.$transaction(async (tx) => {
+    const newTask = await tx.task.create({
+      data: {
+        tenantId,
+        projectId: input.project_id || null,
+        source: input.source,
+        type: input.type || "general",
         status,
-        created_at: now,
-        updated_at: now
+        title: input.title || "(untitled)",
+        description: input.description || "",
+        priority: input.priority || "normal",
+        dueDate: input.due_date ? new Date(input.due_date) : null,
+        assignedToId: input.assignee_id || null,
+        aiGenerated: isAiSource,
+        createdById: authCtx.user.id,
       },
-      ai_job_id: isAiSource ? randomUUID() : null
+    });
+
+    // Emit event
+    await tx.outboxEvent.create({
+      data: createOutboxEvent({
+        tenantId,
+        eventType: "task.created.v1",
+        aggregateId: newTask.id,
+        actorUserId: authCtx.user.id,
+        payload: {
+          taskId: newTask.id,
+          source: input.source,
+          status,
+          aiGenerated: isAiSource,
+        },
+      }),
+    });
+
+    return newTask;
+  });
+
+  return c.json({
+    task: {
+      id: task.id,
+      tenant_id: task.tenantId,
+      project_id: task.projectId,
+      source: task.source,
+      type: task.type,
+      status: task.status,
+      title: task.title,
+      description: task.description,
+      priority: task.priority,
+      due_date: task.dueDate?.toISOString() || null,
+      assignee_id: task.assignedToId,
+      ai_generated: task.aiGenerated,
+      created_at: task.createdAt.toISOString(),
+      updated_at: task.updatedAt.toISOString(),
     },
-    201
-  );
+    ai_job_id: isAiSource ? crypto.randomUUID() : null,
+  }, 201);
 });
 
-taskflowRouter.get("/tasks", (c: any) => {
-  // TODO: list from DB with filters.
-  return c.json({ tasks: [] });
+taskflowRoutes.get("/tasks", async (c) => {
+  const authCtx = c.get("auth");
+  const tenantId = authCtx.tenantId!;
+
+  // Parse query params
+  const status = c.req.query("status");
+  const projectId = c.req.query("project_id");
+  const source = c.req.query("source");
+  const type = c.req.query("type");
+  const priority = c.req.query("priority");
+  const assigneeId = c.req.query("assignee_id");
+
+  const where: any = { tenantId };
+  if (status) where.status = status;
+  if (projectId) where.projectId = projectId;
+  if (source) where.source = source;
+  if (type) where.type = type;
+  if (priority) where.priority = priority;
+  if (assigneeId) where.assignedToId = assigneeId;
+
+  const tasks = await prisma.task.findMany({
+    where,
+    orderBy: { updatedAt: "desc" },
+    take: 100, // Limit for MVP
+  });
+
+  return c.json({
+    tasks: tasks.map((task) => ({
+      id: task.id,
+      tenant_id: task.tenantId,
+      project_id: task.projectId,
+      source: task.source,
+      type: task.type,
+      status: task.status,
+      title: task.title,
+      description: task.description,
+      priority: task.priority,
+      due_date: task.dueDate?.toISOString() || null,
+      assignee_id: task.assignedToId,
+      ai_generated: task.aiGenerated,
+      created_at: task.createdAt.toISOString(),
+      updated_at: task.updatedAt.toISOString(),
+    })),
+  });
 });
 
-taskflowRouter.get("/tasks/:id", (c: any) => {
-  // TODO: fetch from DB
-  return c.json({ error: "not_implemented" }, 501);
+taskflowRoutes.get("/tasks/:id", async (c) => {
+  const authCtx = c.get("auth");
+  const tenantId = authCtx.tenantId!;
+  const taskId = c.req.param("id");
+
+  const task = await prisma.task.findFirst({
+    where: {
+      id: taskId,
+      tenantId,
+    },
+  });
+
+  if (!task) {
+    throw new HTTPException(404, { message: "Task not found" });
+  }
+
+  return c.json({
+    task: {
+      id: task.id,
+      tenant_id: task.tenantId,
+      project_id: task.projectId,
+      source: task.source,
+      type: task.type,
+      status: task.status,
+      title: task.title,
+      description: task.description,
+      priority: task.priority,
+      due_date: task.dueDate?.toISOString() || null,
+      assignee_id: task.assignedToId,
+      ai_generated: task.aiGenerated,
+      created_at: task.createdAt.toISOString(),
+      updated_at: task.updatedAt.toISOString(),
+    },
+  });
 });
 
-taskflowRouter.post("/tasks/:id/approve", async (c: any) => {
-  // TODO: RBAC gated approval → publish task.
-  const body = z.object({ note: z.string().max(2000).optional() }).safeParse(await c.req.json().catch(() => null));
-  if (!body.success) return c.json({ error: "invalid_body", details: body.error.flatten() }, 400);
-
-  return c.json({ status: "approved" });
+const UpdateTaskBodySchema = z.object({
+  title: z.string().max(140).optional(),
+  description: z.string().max(5000).optional(),
+  status: z.enum(["open", "in_progress", "completed", "cancelled"]).optional(),
+  priority: z.enum(["low", "normal", "high", "urgent"]).optional(),
+  due_date: z.string().optional(),
+  assignee_id: z.string().uuid().optional(),
 });
+
+taskflowRoutes.patch("/tasks/:id", zValidator("json", UpdateTaskBodySchema), async (c) => {
+  const authCtx = c.get("auth");
+  const tenantId = authCtx.tenantId!;
+  const taskId = c.req.param("id");
+  const input = c.req.valid("json");
+
+  // Get existing task
+  const existingTask = await prisma.task.findFirst({
+    where: {
+      id: taskId,
+      tenantId,
+    },
+  });
+
+  if (!existingTask) {
+    throw new HTTPException(404, { message: "Task not found" });
+  }
+
+  // Validate status transitions
+  if (input.status && input.status !== existingTask.status) {
+    const validTransitions: Record<string, string[]> = {
+      pending_approval: ["approved", "open"],
+      approved: ["open"],
+      open: ["in_progress", "completed", "cancelled"],
+      in_progress: ["completed", "cancelled"],
+    };
+
+    const allowed = validTransitions[existingTask.status] || [];
+    if (!allowed.includes(input.status)) {
+      throw new HTTPException(400, {
+        message: `Invalid status transition from ${existingTask.status} to ${input.status}`,
+      });
+    }
+  }
+
+  const updateData: any = {};
+  if (input.title !== undefined) updateData.title = input.title;
+  if (input.description !== undefined) updateData.description = input.description;
+  if (input.status !== undefined) updateData.status = input.status;
+  if (input.priority !== undefined) updateData.priority = input.priority;
+  if (input.due_date !== undefined) updateData.dueDate = input.due_date ? new Date(input.due_date) : null;
+  if (input.assignee_id !== undefined) updateData.assignedToId = input.assignee_id;
+
+  const task = await prisma.$transaction(async (tx) => {
+    const updatedTask = await tx.task.update({
+      where: { id: taskId },
+      data: updateData,
+    });
+
+    // Emit event
+    await tx.outboxEvent.create({
+      data: createOutboxEvent({
+        tenantId,
+        eventType: "task.updated.v1",
+        aggregateId: updatedTask.id,
+        actorUserId: authCtx.user.id,
+        payload: {
+          taskId: updatedTask.id,
+          changes: input,
+        },
+      }),
+    });
+
+    return updatedTask;
+  });
+
+  return c.json({
+    task: {
+      id: task.id,
+      tenant_id: task.tenantId,
+      project_id: task.projectId,
+      source: task.source,
+      type: task.type,
+      status: task.status,
+      title: task.title,
+      description: task.description,
+      priority: task.priority,
+      due_date: task.dueDate?.toISOString() || null,
+      assignee_id: task.assignedToId,
+      ai_generated: task.aiGenerated,
+      created_at: task.createdAt.toISOString(),
+      updated_at: task.updatedAt.toISOString(),
+    },
+  });
+});
+
+const ApproveTaskBodySchema = z.object({
+  note: z.string().max(2000).optional(),
+});
+
+taskflowRoutes.post(
+  "/tasks/:id/approve",
+  requirePermission(PERMISSIONS.TASKS_APPROVE),
+  zValidator("json", ApproveTaskBodySchema),
+  async (c) => {
+    const authCtx = c.get("auth");
+    const tenantId = authCtx.tenantId!;
+    const taskId = c.req.param("id");
+    const input = c.req.valid("json");
+
+    const task = await prisma.task.findFirst({
+      where: {
+        id: taskId,
+        tenantId,
+      },
+    });
+
+    if (!task) {
+      throw new HTTPException(404, { message: "Task not found" });
+    }
+
+    if (task.status !== "pending_approval") {
+      throw new HTTPException(400, { message: "Task is not pending approval" });
+    }
+
+    const updatedTask = await prisma.$transaction(async (tx) => {
+      const approved = await tx.task.update({
+        where: { id: taskId },
+        data: {
+          status: "open", // Move to open after approval
+        },
+      });
+
+      // Emit event
+      await tx.outboxEvent.create({
+        data: createOutboxEvent({
+          tenantId,
+          eventType: "task.approved.v1",
+          aggregateId: approved.id,
+          actorUserId: authCtx.user.id,
+          payload: {
+            taskId: approved.id,
+            note: input.note,
+          },
+        }),
+      });
+
+      return approved;
+    });
+
+    return c.json({
+      status: "approved",
+      task: {
+        id: updatedTask.id,
+        status: updatedTask.status,
+      },
+    });
+  }
+);
+
+// ============================================================================
+// DAILY PLANS
+// ============================================================================
 
 const GenerateDailyPlanSchema = z.object({
-  org_id: z.string().min(1),
-  project_id: z.string().min(1).optional(),
-  date: z.string().min(1),
-  constraints: z.record(z.any()).optional()
+  project_id: z.string().uuid().optional(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  constraints: z.record(z.any()).optional(),
 });
 
-taskflowRouter.post("/daily-plans/generate", async (c: any) => {
-  const body = GenerateDailyPlanSchema.safeParse(await c.req.json().catch(() => null));
-  if (!body.success) return c.json({ error: "invalid_body", details: body.error.flatten() }, 400);
+taskflowRoutes.post("/daily-plans/generate", zValidator("json", GenerateDailyPlanSchema), async (c) => {
+  const authCtx = c.get("auth");
+  const tenantId = authCtx.tenantId!;
+  const input = c.req.valid("json");
+
+  // TODO: Implement AI daily plan generation
+  // For now, create a placeholder daily plan
+  const dailyPlan = await prisma.dailyPlan.create({
+    data: {
+      tenantId,
+      projectId: input.project_id || null,
+      date: input.date,
+      status: "pending_approval",
+      taskIds: [],
+      aiGenerated: true,
+      createdById: authCtx.user.id,
+    },
+  });
 
   return c.json(
     {
-      daily_plan_id: randomUUID(),
-      ai_job_id: randomUUID()
+      daily_plan_id: dailyPlan.id,
+      ai_job_id: crypto.randomUUID(),
     },
     202
   );
 });
 
-taskflowRouter.get("/daily-plans/:id", (c: any) => {
-  return c.json({ error: "not_implemented" }, 501);
+taskflowRoutes.get("/daily-plans/:id", async (c) => {
+  const authCtx = c.get("auth");
+  const tenantId = authCtx.tenantId!;
+  const planId = c.req.param("id");
+
+  const plan = await prisma.dailyPlan.findFirst({
+    where: {
+      id: planId,
+      tenantId,
+    },
+  });
+
+  if (!plan) {
+    throw new HTTPException(404, { message: "Daily plan not found" });
+  }
+
+  return c.json({
+    daily_plan: {
+      id: plan.id,
+      tenant_id: plan.tenantId,
+      project_id: plan.projectId,
+      date: plan.date,
+      status: plan.status,
+      task_ids: plan.taskIds,
+      summary: plan.summary,
+      ai_generated: plan.aiGenerated,
+      created_at: plan.createdAt.toISOString(),
+      updated_at: plan.updatedAt.toISOString(),
+    },
+  });
 });
 
-
+export { taskflowRoutes };

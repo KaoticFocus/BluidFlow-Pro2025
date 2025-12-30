@@ -4,6 +4,7 @@ import { HTTPException } from "hono/http-exception";
 import { AssignRolesSchema, PERMISSIONS } from "@buildflow/shared";
 import { authMiddleware, tenantMiddleware, requirePermission } from "../middleware/auth";
 import { createOutboxEvent, FOUNDATION_EVENTS } from "../lib/outbox";
+import { prisma } from "../lib/prisma";
 
 const rbac = new Hono();
 
@@ -18,8 +19,6 @@ rbac.get("/roles", async (c) => {
   const authCtx = c.get("auth");
   const tenantId = authCtx.tenantId!;
 
-  // TODO: Replace with Prisma implementation
-  /*
   const roles = await prisma.role.findMany({
     where: {
       OR: [
@@ -45,18 +44,8 @@ rbac.get("/roles", async (c) => {
     isSystem: role.isSystem,
     permissions: role.rolePermissions.map((rp) => rp.permission),
   }));
-  */
 
-  // Return default system roles as placeholder
-  const defaultRoles = [
-    { id: "1", key: "owner", name: "Owner", description: "Full access", isSystem: true, permissions: [] },
-    { id: "2", key: "admin", name: "Admin", description: "Administrative access", isSystem: true, permissions: [] },
-    { id: "3", key: "sales", name: "Sales", description: "Sales access", isSystem: true, permissions: [] },
-    { id: "4", key: "field_tech", name: "Field Tech", description: "Field technician access", isSystem: true, permissions: [] },
-    { id: "5", key: "client", name: "Client", description: "Client access", isSystem: true, permissions: [] },
-  ];
-
-  return c.json({ roles: defaultRoles });
+  return c.json({ roles: formattedRoles });
 });
 
 /**
@@ -64,21 +53,9 @@ rbac.get("/roles", async (c) => {
  * List all available permissions
  */
 rbac.get("/permissions", async (c) => {
-  // TODO: Replace with Prisma implementation
-  /*
   const permissions = await prisma.permission.findMany({
     orderBy: [{ category: "asc" }, { key: "asc" }],
   });
-  */
-
-  // Return permission keys as placeholder
-  const permissions = Object.entries(PERMISSIONS).map(([key, value]) => ({
-    id: key.toLowerCase(),
-    key: value,
-    name: key.replace(/_/g, " ").toLowerCase(),
-    description: null,
-    category: value.split(".")[0],
-  }));
 
   return c.json({ permissions });
 });
@@ -96,8 +73,6 @@ rbac.post(
     const tenantId = authCtx.tenantId!;
     const input = c.req.valid("json");
 
-    // TODO: Replace with Prisma implementation
-    /*
     // Get membership
     const membership = await prisma.tenantMembership.findUnique({
       where: {
@@ -159,7 +134,6 @@ rbac.post(
         }),
       });
     });
-    */
 
     return c.body(null, 204);
   }

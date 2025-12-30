@@ -10,7 +10,8 @@
     "baseUrl": ".",
     "paths": {
       "@buildflow/shared/*": ["../../packages/shared/src/*"],
-      "@buildflow/events/*": ["../../packages/events/src/*"]
+      "@buildflow/events/*": ["../../packages/events/src/*"],
+      "@buildflow/db": ["../../packages/db/src/index.ts"]
     }
   },
   "include": ["src/**/*.ts", "../../types/**/*.d.ts"]

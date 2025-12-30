@@ -4,8 +4,9 @@ import { HTTPException } from "hono/http-exception";
 import { InviteSchema, AcceptInviteSchema } from "@buildflow/shared";
 import { PERMISSIONS } from "@buildflow/shared";
 import { authMiddleware, tenantMiddleware, requirePermission } from "../middleware/auth";
-import { generateInviteToken } from "../lib/password";
+import { generateInviteToken, hashPassword } from "../lib/password";
 import { createOutboxEvent, FOUNDATION_EVENTS } from "../lib/outbox";
+import { prisma } from "../lib/prisma";
 
 const tenants = new Hono();
 
@@ -24,8 +25,6 @@ tenants.get(
     const authCtx = c.get("auth");
     const tenantId = authCtx.tenantId!;
 
-    // TODO: Replace with Prisma implementation
-    /*
     const memberships = await prisma.tenantMembership.findMany({
       where: { tenantId, status: { not: "disabled" } },
       include: {
@@ -45,9 +44,8 @@ tenants.get(
       roles: m.roles.map((r) => r.role),
       createdAt: m.createdAt,
     }));
-    */
 
-    return c.json({ members: [] });
+    return c.json({ members });
   }
 );
 
@@ -65,8 +63,6 @@ tenants.post(
     const tenantId = authCtx.tenantId!;
     const input = c.req.valid("json");
 
-    // TODO: Replace with Prisma implementation
-    /*
     // Check if user is already a member
     const existingUser = await prisma.user.findUnique({
       where: { email: input.email },
@@ -136,13 +132,9 @@ tenants.post(
     });
 
     // TODO: Queue email job to send invitation
-    */
-
-    const token = generateInviteToken();
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
     return c.json({
-      inviteId: "placeholder-invite-id",
+      inviteId: invitation.id,
       email: input.email,
       expiresAt: expiresAt.toISOString(),
     }, 201);
@@ -161,8 +153,6 @@ publicTenants.post(
   async (c) => {
     const input = c.req.valid("json");
 
-    // TODO: Replace with Prisma implementation
-    /*
     const invitation = await prisma.tenantInvitation.findUnique({
       where: { token: input.token },
       include: { tenant: true },
@@ -187,17 +177,14 @@ publicTenants.post(
 
     const result = await prisma.$transaction(async (tx) => {
       // Create user if doesn't exist
+      // Note: For Supabase Auth integration, users are created via Supabase signup
+      // This endpoint is for accepting invites when user already exists in Supabase
       if (!user) {
-        if (!input.password) {
-          throw new HTTPException(400, { message: "Password is required for new users" });
-        }
-        user = await tx.user.create({
-          data: {
-            email: invitation.email,
-            passwordHash: hashPassword(input.password),
-            name: input.name,
-            status: "active",
-          },
+        // If user doesn't exist, they need to sign up via Supabase Auth first
+        // For now, we'll create a placeholder user record
+        // In production, this should redirect to signup flow
+        throw new HTTPException(400, { 
+          message: "User account not found. Please sign up first, then accept the invitation." 
         });
       }
 
@@ -240,14 +227,13 @@ publicTenants.post(
 
       return { membership, user };
     });
-    */
 
     return c.json({
       membership: {
-        id: "placeholder-membership-id",
-        tenantId: "placeholder-tenant-id",
-        userId: "placeholder-user-id",
-        status: "active",
+        id: result.membership.id,
+        tenantId: result.membership.tenantId,
+        userId: result.membership.userId,
+        status: result.membership.status,
       },
     });
   }
@@ -265,8 +251,6 @@ tenants.get(
     const authCtx = c.get("auth");
     const tenantId = authCtx.tenantId!;
 
-    // TODO: Replace with Prisma implementation
-    /*
     const invitations = await prisma.tenantInvitation.findMany({
       where: {
         tenantId,
@@ -278,9 +262,8 @@ tenants.get(
       },
       orderBy: { createdAt: "desc" },
     });
-    */
 
-    return c.json({ invitations: [] });
+    return c.json({ invitations });
   }
 );
 
@@ -297,8 +280,6 @@ tenants.delete(
     const tenantId = authCtx.tenantId!;
     const invitationId = c.req.param("id");
 
-    // TODO: Replace with Prisma implementation
-    /*
     const invitation = await prisma.tenantInvitation.findFirst({
       where: { id: invitationId, tenantId },
     });
@@ -310,7 +291,6 @@ tenants.delete(
     await prisma.tenantInvitation.delete({
       where: { id: invitationId },
     });
-    */
 
     return c.body(null, 204);
   }
