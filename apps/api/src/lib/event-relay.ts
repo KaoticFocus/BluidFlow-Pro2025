@@ -7,6 +7,8 @@ import { prisma } from "./prisma";
 import { createHash } from "node:crypto";
 import { randomUUID } from "node:crypto";
 import { withSpan, addSpanAttributes } from "./otel";
+import { redactPayloadDeep, detectPayloadPII, createPIITags, type PIIRedactionResult } from "./pii-redaction";
+import { logger } from "./logger";
 
 const BATCH_SIZE = 15;
 const MAX_ATTEMPTS = 10;
@@ -28,36 +30,24 @@ function parseEventType(eventType: string): { schemaId: string; version: string 
 }
 
 /**
- * Redact sensitive fields from payload for privacy
+ * Redact PII from payload using comprehensive detection
+ * Returns redacted payload and PII tags for event headers
  */
-function redactPayload(payload: any): any {
-  const sensitiveFields = ["password", "passwordHash", "token", "secret", "apiKey", "ssn", "creditCard"];
+function redactPayload(payload: any): { redacted: any; piiTags: string[] } {
+  const result = redactPayloadDeep(payload);
   
-  function redactObject(obj: any): any {
-    if (typeof obj !== "object" || obj === null) {
-      return obj;
-    }
-
-    if (Array.isArray(obj)) {
-      return obj.map(redactObject);
-    }
-
-    const redacted: any = {};
-    for (const [key, value] of Object.entries(obj)) {
-      const lowerKey = key.toLowerCase();
-      if (sensitiveFields.some((field) => lowerKey.includes(field))) {
-        redacted[key] = "[REDACTED]";
-      } else if (typeof value === "object" && value !== null) {
-        redacted[key] = redactObject(value);
-      } else {
-        redacted[key] = value;
-      }
-    }
-
-    return redacted;
+  // Log redaction summary if PII was detected
+  if (result.piiDetected) {
+    logger.info("PII detected and redacted in event payload", {
+      piiTypes: result.piiTags,
+      fieldsRedacted: result.redactionSummary.fieldsRedacted.slice(0, 5), // Log first 5 fields
+    });
   }
-
-  return redactObject(payload);
+  
+  return {
+    redacted: result.redactedPayload,
+    piiTags: createPIITags(result.piiTags),
+  };
 }
 
 /**
