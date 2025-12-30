@@ -45,7 +45,6 @@ export function buildTaskWhereClause(
  * Uses composite indexes for efficient filtering
  */
 export function buildDailyPlanTaskQuery(
-  tenantId: string,
   planDate: Date,
   projectId?: string
 ): Prisma.TaskWhereInput {
