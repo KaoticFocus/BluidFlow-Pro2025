@@ -1,14 +1,19 @@
 import { Hono } from "hono";
+import type { Context } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { HTTPException } from "hono/http-exception";
+import { z } from "zod";
 import { 
   CreateAIActionSchema, 
   CreateDecisionSchema, 
   AIActionQuerySchema,
-  PERMISSIONS 
-} from "@buildflow/shared";
+} from "../../../../packages/shared/src/ai-action";
+import { PERMISSIONS } from "../../../../packages/shared/src/rbac";
 import { authMiddleware, tenantMiddleware, requirePermission } from "../middleware/auth";
+import type { AuthContext } from "../middleware/auth";
 import { createOutboxEvent, FOUNDATION_EVENTS } from "../lib/outbox";
+import { prisma } from "../lib/prisma";
+import { createPaginatedResponse } from "../lib/pagination";
 
 const ai = new Hono();
 
@@ -23,13 +28,11 @@ ai.post(
   "/actions",
   requirePermission(PERMISSIONS.AI_ACTIONS_CREATE),
   zValidator("json", CreateAIActionSchema),
-  async (c) => {
-    const authCtx = c.get("auth");
+  async (c: Context) => {
+    const authCtx = c.get("auth") as AuthContext;
     const tenantId = authCtx.tenantId!;
-    const input = c.req.valid("json");
+    const input = c.req.valid("json") as z.infer<typeof CreateAIActionSchema>;
 
-    // TODO: Replace with Prisma implementation
-    /*
     const action = await prisma.$transaction(async (tx) => {
       const aiAction = await tx.aIActionLog.create({
         data: {
@@ -39,17 +42,17 @@ ai.post(
           promptHash: input.promptHash,
           inputRefTable: input.inputRefTable || null,
           inputRefId: input.inputRefId || null,
-          inputSnapshot: input.inputSnapshot,
+          inputSnapshot: input.inputSnapshot as any,
           outputKind: input.outputKind,
-          outputSnapshot: input.outputSnapshot,
-          citations: input.citations || null,
-          tokenUsage: input.tokenUsage,
-          estimatedCostUsd: input.estimatedCostUsd || null,
+          outputSnapshot: input.outputSnapshot as any,
+          citations: input.citations ? (input.citations as any) : null,
+          tokenUsage: input.tokenUsage as any,
+          estimatedCostUsd: input.estimatedCostUsd ? input.estimatedCostUsd : null,
           requiresReview: input.requiresReview,
           status: input.requiresReview ? "proposed" : "approved",
-          plannedSideEffects: input.plannedSideEffects || null,
+          plannedSideEffects: input.plannedSideEffects ? (input.plannedSideEffects as any) : null,
           piiDetected: input.piiDetected,
-          redactionSummary: input.redactionSummary || null,
+          redactionSummary: input.redactionSummary ? (input.redactionSummary as any) : null,
           traceId: input.traceId || null,
           correlationId: input.correlationId || null,
           latencyMs: input.latencyMs || null,
@@ -57,14 +60,14 @@ ai.post(
       });
 
       // Create planned side effects as pending
-      if (input.plannedSideEffects?.length) {
+      if (input.plannedSideEffects && input.plannedSideEffects.length > 0) {
         await tx.aIActionSideEffect.createMany({
-          data: input.plannedSideEffects.map((effect) => ({
+          data: input.plannedSideEffects.map((effect: { type: string; target: string; payload: Record<string, unknown> }) => ({
             logId: aiAction.id,
             tenantId,
             effectType: effect.type,
             targetRef: effect.target,
-            payload: effect.payload,
+            payload: effect.payload as any,
             status: "pending",
           })),
         });
@@ -77,8 +80,8 @@ ai.post(
           eventType: FOUNDATION_EVENTS.AI_ACTION_LOGGED,
           aggregateId: aiAction.id,
           actorUserId: authCtx.user.id,
-          traceId: input.traceId,
-          correlationId: input.correlationId,
+          traceId: input.traceId || null,
+          correlationId: input.correlationId || null,
           payload: {
             actionId: aiAction.id,
             model: input.model,
@@ -96,9 +99,6 @@ ai.post(
     });
 
     return c.json({ actionId: action.id }, 201);
-    */
-
-    return c.json({ actionId: "placeholder-action-id" }, 201);
   }
 );
 
@@ -110,14 +110,12 @@ ai.get(
   "/actions",
   requirePermission(PERMISSIONS.AI_ACTIONS_READ),
   zValidator("query", AIActionQuerySchema),
-  async (c) => {
-    const authCtx = c.get("auth");
+  async (c: Context) => {
+    const authCtx = c.get("auth") as AuthContext;
     const tenantId = authCtx.tenantId!;
-    const query = c.req.valid("query");
+    const query = c.req.valid("query") as z.infer<typeof AIActionQuerySchema>;
 
-    // TODO: Replace with Prisma implementation
-    /*
-    const where: Prisma.AIActionLogWhereInput = {
+    const where: any = {
       tenantId,
     };
 
@@ -135,10 +133,11 @@ ai.get(
       where.id = { lt: query.cursor };
     }
 
+    const limit = query.limit || 20;
     const actions = await prisma.aIActionLog.findMany({
       where,
       orderBy: { createdAt: "desc" },
-      take: query.limit,
+      take: limit + 1, // Fetch one extra to check hasMore
       include: {
         actor: { select: { id: true, email: true, name: true } },
         decisions: {
@@ -151,12 +150,23 @@ ai.get(
       },
     });
 
-    const nextCursor = actions.length === query.limit ? actions[actions.length - 1].id : null;
-    */
+    const formattedActions = actions.map((action: any) => ({
+      id: action.id,
+      model: action.model,
+      outputKind: action.outputKind,
+      status: action.status,
+      requiresReview: action.requiresReview,
+      actor: action.actor,
+      latestDecision: action.decisions[0] || null,
+      createdAt: action.createdAt.toISOString(),
+    }));
 
-    return c.json({ 
-      actions: [],
-      nextCursor: null,
+    const paginated = createPaginatedResponse(formattedActions, limit, (a) => a.id);
+
+    return c.json({
+      actions: paginated.items,
+      nextCursor: paginated.nextCursor,
+      hasMore: paginated.hasMore,
     });
   }
 );
@@ -168,13 +178,11 @@ ai.get(
 ai.get(
   "/actions/:id",
   requirePermission(PERMISSIONS.AI_ACTIONS_READ),
-  async (c) => {
-    const authCtx = c.get("auth");
+  async (c: Context) => {
+    const authCtx = c.get("auth") as AuthContext;
     const tenantId = authCtx.tenantId!;
     const actionId = c.req.param("id");
 
-    // TODO: Replace with Prisma implementation
-    /*
     const action = await prisma.aIActionLog.findFirst({
       where: { id: actionId, tenantId },
       include: {
@@ -194,9 +202,48 @@ ai.get(
     if (!action) {
       throw new HTTPException(404, { message: "AI action not found" });
     }
-    */
 
-    throw new HTTPException(404, { message: "AI action not found" });
+    return c.json({
+      id: action.id,
+      tenantId: action.tenantId,
+      actor: action.actor,
+      model: action.model,
+      promptHash: action.promptHash,
+      inputRefTable: action.inputRefTable,
+      inputRefId: action.inputRefId,
+      inputSnapshot: action.inputSnapshot,
+      outputKind: action.outputKind,
+      outputSnapshot: action.outputSnapshot,
+      citations: action.citations,
+      tokenUsage: action.tokenUsage,
+      estimatedCostUsd: action.estimatedCostUsd ? Number(action.estimatedCostUsd) : null,
+      requiresReview: action.requiresReview,
+      status: action.status,
+      plannedSideEffects: action.plannedSideEffects,
+      piiDetected: action.piiDetected,
+      redactionSummary: action.redactionSummary,
+      traceId: action.traceId,
+      correlationId: action.correlationId,
+      latencyMs: action.latencyMs,
+      decisions: action.decisions.map((d: any) => ({
+        id: d.id,
+        decision: d.decision,
+        reason: d.reason,
+        reviewer: d.reviewer,
+        createdAt: d.createdAt.toISOString(),
+      })),
+      sideEffects: action.sideEffects.map((se: any) => ({
+        id: se.id,
+        effectType: se.effectType,
+        targetRef: se.targetRef,
+        payload: se.payload,
+        status: se.status,
+        error: se.error,
+        executedAt: se.executedAt?.toISOString() || null,
+        createdAt: se.createdAt.toISOString(),
+      })),
+      createdAt: action.createdAt.toISOString(),
+    });
   }
 );
 
@@ -208,14 +255,12 @@ ai.post(
   "/actions/:id/decision",
   requirePermission(PERMISSIONS.AI_ACTIONS_APPROVE),
   zValidator("json", CreateDecisionSchema),
-  async (c) => {
-    const authCtx = c.get("auth");
+  async (c: Context) => {
+    const authCtx = c.get("auth") as AuthContext;
     const tenantId = authCtx.tenantId!;
     const actionId = c.req.param("id");
-    const input = c.req.valid("json");
+    const input = c.req.valid("json") as z.infer<typeof CreateDecisionSchema>;
 
-    // TODO: Replace with Prisma implementation
-    /*
     const action = await prisma.aIActionLog.findFirst({
       where: { id: actionId, tenantId },
       include: { sideEffects: true },
@@ -258,8 +303,8 @@ ai.post(
           eventType,
           aggregateId: actionId,
           actorUserId: authCtx.user.id,
-          traceId: action.traceId,
-          correlationId: action.correlationId,
+          traceId: action.traceId || null,
+          correlationId: action.correlationId || null,
           payload: {
             actionId,
             decisionId: decision.id,
@@ -273,15 +318,17 @@ ai.post(
       // If approved, queue side effects for execution
       if (input.decision === "approve" && action.sideEffects.length > 0) {
         // TODO: Queue BullMQ jobs for each side effect
+        // For now, mark side effects as ready for execution
+        await tx.aIActionSideEffect.updateMany({
+          where: { logId: actionId, status: "pending" },
+          data: { status: "executing" },
+        });
       }
 
       return decision;
     });
 
     return c.json({ decisionId: result.id }, 201);
-    */
-
-    return c.json({ decisionId: "placeholder-decision-id" }, 201);
   }
 );
 
@@ -292,12 +339,11 @@ ai.post(
 ai.get(
   "/actions/pending-review",
   requirePermission(PERMISSIONS.AI_ACTIONS_READ),
-  async (c) => {
-    const authCtx = c.get("auth");
+  async (c: Context) => {
+    const authCtx = c.get("auth") as AuthContext;
     const tenantId = authCtx.tenantId!;
 
-    // TODO: Replace with Prisma implementation
-    /*
+    const limit = 50;
     const actions = await prisma.aIActionLog.findMany({
       where: {
         tenantId,
@@ -305,14 +351,27 @@ ai.get(
         status: "proposed",
       },
       orderBy: { createdAt: "desc" },
-      take: 50,
+      take: limit + 1, // Fetch one extra to check hasMore
       include: {
         actor: { select: { id: true, email: true, name: true } },
       },
     });
-    */
 
-    return c.json({ actions: [] });
+    const formattedActions = actions.map((action: any) => ({
+      id: action.id,
+      model: action.model,
+      outputKind: action.outputKind,
+      actor: action.actor,
+      createdAt: action.createdAt.toISOString(),
+    }));
+
+    const paginated = createPaginatedResponse(formattedActions, limit, (a) => a.id);
+
+    return c.json({
+      actions: paginated.items,
+      nextCursor: paginated.nextCursor,
+      hasMore: paginated.hasMore,
+    });
   }
 );
 
