@@ -79,7 +79,7 @@ export abstract class BaseConsumer {
     sequence: bigint;
     lastError?: string | null;
   } | null> {
-    return await (prisma as any).consumerEvent.findUnique({
+    const result = await (prisma as any).consumerEvent.findUnique({
       where: {
         consumerName_eventId: {
           consumerName: this.config.name,
