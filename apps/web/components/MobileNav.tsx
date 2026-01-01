@@ -24,7 +24,7 @@ export function MobileNav({ userName, userInitial, userEmail }: MobileNavProps) 
 
   return (
     <>
-      {/* Hamburger button - visible on mobile only */}
+      {/* Hamburger button - visible on mobile only (< 768px) */}
       <button
         ref={hamburgerRef}
         onClick={() => setIsOpen(true)}

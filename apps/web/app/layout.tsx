@@ -4,6 +4,9 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "BuildFlow Pro",
   description: "AI-powered construction management platform",
+  icons: {
+    icon: '/favicon.ico',
+  },
 };
 
 export const viewport: Viewport = {

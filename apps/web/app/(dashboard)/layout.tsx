@@ -24,7 +24,7 @@ export default async function DashboardLayout({
 
   return (
     <div className="min-h-screen-safe bg-slate-900 flex">
-      {/* Mobile Navigation */}
+      {/* Mobile Navigation - Always rendered, but hamburger button only visible on mobile */}
       <MobileNav userName={userName} userInitial={userInitial} userEmail={user.email || ''} />
 
       {/* Sidebar - hidden on mobile */}
