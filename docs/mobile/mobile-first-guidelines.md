@@ -1,52 +1,47 @@
-# Mobile-First & Responsive Guidelines (v1)
+# Mobile-First Guidelines (v1)
 
-Goal: Ensure BuildFlow Pro 2025 is fully usable on mobile (360–430px), with no horizontal scroll, a11y-compliant hit targets, and smooth navigation.
+Purpose
+- Establish a consistent, mobile-first UX baseline across the app with clear acceptance criteria.
 
-Principles
-- Mobile-first: Design smallest breakpoint first; progressively enhance.
-- Performance budget: TTI ≤ 3s on mid-tier mobile, Lighthouse Mobile Perf ≥ 80.
-- Accessibility: Tap targets ≥ 44×44px, color contrast ≥ 4.5:1, keyboard + screen-reader friendly.
-- Content priority: One primary action per screen; secondary actions in menus/sheets.
+Targets
+- Lighthouse Mobile: Performance ≥ 80, Accessibility ≥ 90, Best Practices ≥ 90 on Home and main list page.
+- No horizontal scroll at 360px width; all interactive elements ≥ 44×44 px.
 
-Breakpoints (Tailwind defaults)
-- sm: 640px, md: 768px, lg: 1024px, xl: 1280px
-- Design baseline: 360×740 (Android), 390×844 (iPhone 12/14)
+Viewport & Safe Areas
+- <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+- Use dynamic viewport units for full-height regions: min-height: 100dvh.
+- Apply safe area insets on body and fixed/sticky bars: padding: env(safe-area-inset-*)
 
-Layout rules
-- Container: p-4 at <md; avoid nested horizontal scrolling. Use overflow-x-hidden on body.
-- Safe areas: Respect env(safe-area-inset-*) on iOS (padding on top/bottom when position: fixed).
-- Grids: Collapse to 1-col on <md; avoid more than two columns on small devices.
+Typography & Layout
+- Fluid type: html { font-size: clamp(15px, 1.6vw, 16px); }
+- Prevent overflow: html, body { overflow-x: hidden; }
+- Containers: max-width: 100%; padding-inline: 16px on mobile.
 
-Navigation patterns
-- Desktop drawer → Mobile sheet (bottom modal) for global nav/filters.
-- Use sticky top bars for context; avoid nested sticky elements.
-- Preserve ?next param on login to return to intended route.
+Navigation (Mobile)
+- Hide desktop sidebar/drawer under md; provide a mobile menu (bottom sheet or modal).
+- Focus trap while open, restore focus on close; lock body scroll; close on Esc/backdrop.
 
-Touch & interaction
-- Tap targets: min-h-[44px] and px-4; spacing: gap-3+ for groups.
-- Gestures: Optional only; always provide explicit controls.
-- Text: Base 16px; use leading-relaxed and hyphens-auto for long content.
+Lists & Cards
+- Prefer cards over dense tables on mobile; large tap area, multiline titles, status chips.
+- One primary action per card; secondary actions in a trailing menu.
 
-Data presentation
-- Lists: Cardized rows with key KPIs, status chips, and trailing chevron.
-- Tables: Convert to stacked cards on <md.
-- Long text (transcripts/logs): Use overflow-wrap: anywhere; wrap pre/code.
+Text & Long Content
+- Wrap anywhere: .content { overflow-wrap: anywhere; word-break: break-word; }
+- Use line clamp for previews; allow full expansion on detail pages.
 
-Media & icons
-- Next/Image with sizes attr; lazy default; avoid layout shifts.
-- Icon-only buttons must have aria-label.
+Forms
+- Labels or aria-labels; inputs not obscured by keyboard; scroll-into-view on focus.
+- Touch-friendly controls and spacing.
+
+Images & Media
+- Provide width/height; lazy-load below the fold; modern formats where possible.
 
 Accessibility
-- Landmark roles: header/main/nav; visible :focus-visible.
-- Form labels always visible; error text with aria-live="polite".
+- Visible focus with :focus-visible; color contrast ≥ AA; hit targets ≥ 44×44.
+- Dialogs/sheets are keyboard and screen-reader friendly.
 
-Testing & QA
-- Devices: iPhone 12/14 Safari, Pixel 6 Chrome.
-- Targets: Lighthouse Mobile A11y ≥ 90; No CLS > 0.1; No horizontal scroll at 360px.
+Performance Quick Wins
+- Defer non-critical scripts; dynamic import heavy components; remove unused prefetch.
 
-References in this repo
-- Next.js App Router at apps/web/app/*
-- Global styles: apps/web/app/globals.css
-- Layout root: apps/web/app/layout.tsx
-
-See hotfix-pack for ready-to-apply snippets.
+QA
+- Validate on iPhone 12/13 mini (360px) and Pixel 6; ensure no horizontal scroll anywhere.

@@ -1,25 +1,37 @@
-# Mobile Implementation Runbook (v1)
+# Implementation Runbook (Mobile-First v1)
 
-Order of execution
-1) Apply Hotfix Pack (docs/mobile/hotfix-pack/) to layout, globals, Tailwind config.
-2) Create protected route shells with mobile-friendly scaffolds (/tasks, /meetings, /schedule, /timeclock, /docs, /ai-actions).
-3) Convert any sidebar/drawer to a mobile sheet per pattern.
-4) Cardize list views on <md (see module-ux docs).
-5) Run Lighthouse Mobile (home + /tasks). Fix quick wins.
-6) QA pass on device matrix. Fix remaining blockers.
+Scope
+- Layout/UX/perf/a11y only. No business logic changes.
 
-Acceptance criteria
-- No horizontal scroll at 360px on all pages above.
-- Tap targets ≥ 44×44; touch-friendly forms.
-- Transcript/log content wraps; no clipped code blocks.
-- Login preserves ?next and redirects correctly after auth.
-- Lighthouse Mobile: Perf ≥ 80, A11y ≥ 90, Best Practices ≥ 90.
+Branch
+- git checkout -b mobile-hotfix-v1
 
-Dev notes (Next.js App Router)
-- Layout: apps/web/app/layout.tsx -> ensure viewport meta and safe areas.
-- Styles: apps/web/app/globals.css -> mobile resets and wrapping.
-- Tailwind: apps/web/tailwind.config.ts -> screens, container padding.
+Order of Work
+1) Global viewport + safe areas
+- Add viewport meta (App/Pages Router equivalent).
+- Add safe-area padding and 100dvh containers.
 
-Handoff to Cursor
-- Use this runbook as the source of truth.
-- Commit style: feat(taskflow): mobile list cards; chore(mobile): apply hotfix 1/6
+2) Navigation (mobile)
+- Hide desktop nav under md; add MobileNav sheet/modal with focus trap and body scroll lock.
+
+3) Lists → Cards
+- Convert dense tables to stacked cards at <md; large tap targets; primary action surfaced.
+
+4) Text wrapping & clamps
+- Apply overflow-wrap:anywhere; clamp long previews; allow expansion in details.
+
+5) Performance
+- Images sized + lazy; dynamic import heavy modules; remove unused prefetch/preconnect.
+
+6) Accessibility
+- 44×44 targets, visible focus, AA contrast, labeled controls.
+
+7) Lighthouse Mobile
+- Targets: Perf ≥ 80, A11y ≥ 90, BP ≥ 90 on Home + main list.
+
+8) Device QA
+- iPhone mini 360px & Pixel 6: no horizontal scroll; nav/dialog usability; keyboard-safe inputs.
+
+Deliverables
+- PR titled: chore(mobile): mobile-first hotfix pack v1 + baseline Lighthouse targets
+- Include scores, device notes, and changed files.

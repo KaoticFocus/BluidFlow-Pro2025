@@ -1,16 +1,17 @@
 # Mobile Device Matrix (v1)
 
-Required
-- iPhone 12/14 (390×844) – iOS Safari
-- Pixel 6 (412×915) – Android Chrome
+Test Targets
+- iPhone 12/13 mini (360×780 CSS), Safari iOS
+- iPhone 14/15 (390×844), Safari iOS
+- Pixel 6/7 (412×915), Chrome Android
 
-Optional nice-to-have
-- iPad (Stage Manager off) – Safari
-- Low-end Android (Moto G Power) – Chrome
+Record
+- Device: iPhone 12 mini — Pass/Notes: ...
+- Device: iPhone 14 — Pass/Notes: ...
+- Device: Pixel 6 — Pass/Notes: ...
 
-Browsers
-- Safari iOS latest
-- Chrome Android latest
-
-Orientation
-- Portrait required; Landscape should remain usable without layout breaks.
+Checks
+- No horizontal scroll
+- Tap targets ≥ 44×44
+- Keyboard does not overlap inputs
+- Dialogs/sheets usable one‑handed
