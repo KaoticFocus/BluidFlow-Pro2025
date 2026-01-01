@@ -1,0 +1,42 @@
+/* Mobile-first baseline (not auto-imported). Import in your main global stylesheet to activate. */
+:root {
+  --tap-target: 44px;
+}
+
+html, body {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+/* Respect safe areas on devices with display cutouts */
+body {
+  padding-top: env(safe-area-inset-top);
+  padding-right: env(safe-area-inset-right);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+}
+
+* { box-sizing: border-box; }
+
+img, video { max-width: 100%; height: auto; }
+
+/* Minimum touch target sizes */
+button, a, input[type="checkbox"], input[type="radio"], .tap-target {
+  min-width: var(--tap-target);
+  min-height: var(--tap-target);
+}
+
+/* Long text and logs should never create horizontal scroll */
+.prose, .content, .truncate-wrap, .log, pre, code {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* Full-height sections should account for mobile browser UI */
+.full-height, .screen {
+  min-height: 100dvh;
+}
+
+/* Utility to hide scrollbars when needed */
+.hide-scrollbar { scrollbar-width: none; }
+.hide-scrollbar::-webkit-scrollbar { display: none; }
