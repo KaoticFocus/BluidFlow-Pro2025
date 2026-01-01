@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { SignOutButton } from './SignOutButton'
+import { MobileNav } from '@/components/MobileNav'
 
 // Force dynamic rendering - these pages require auth
 export const dynamic = 'force-dynamic'
@@ -22,9 +23,12 @@ export default async function DashboardLayout({
   const userInitial = userName.charAt(0).toUpperCase()
 
   return (
-    <div className="min-h-screen bg-slate-900 flex">
-      {/* Sidebar */}
-      <aside className="w-64 bg-slate-800/50 border-r border-slate-700/50 flex flex-col">
+    <div className="min-h-screen-safe bg-slate-900 flex">
+      {/* Mobile Navigation */}
+      <MobileNav userName={userName} userInitial={userInitial} userEmail={user.email || ''} />
+
+      {/* Sidebar - hidden on mobile */}
+      <aside className="hidden md:flex w-64 bg-slate-800/50 border-r border-slate-700/50 flex-col">
         {/* Logo */}
         <div className="p-4 border-b border-slate-700/50">
           <Link href="/dashboard" className="flex items-center gap-2">
@@ -68,7 +72,7 @@ export default async function DashboardLayout({
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 overflow-auto">
+      <main className="flex-1 overflow-auto md:ml-0 pt-16 md:pt-0">
         {children}
       </main>
     </div>
@@ -107,7 +111,7 @@ function NavItem({ href, icon, children }: { href: string; icon: string; childre
   return (
     <Link
       href={href}
-      className="flex items-center gap-3 px-3 py-2 text-slate-300 hover:text-white hover:bg-slate-700/50 rounded-lg transition-colors"
+      className="flex items-center gap-3 px-3 py-2 text-slate-300 hover:text-white hover:bg-slate-700/50 rounded-lg transition-colors min-h-[44px] focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 focus:ring-offset-slate-950"
     >
       {icons[icon]}
       <span className="text-sm font-medium">{children}</span>

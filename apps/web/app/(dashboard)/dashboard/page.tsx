@@ -1,6 +1,6 @@
 export default function DashboardPage() {
   return (
-    <div className="p-6 space-y-8">
+    <div className="p-4 sm:p-6 space-y-8">
       {/* Page header */}
       <div>
         <h1 className="text-2xl font-bold">Dashboard</h1>
@@ -64,8 +64,8 @@ export default function DashboardPage() {
                   <action.icon className={`h-5 w-5 ${action.statusColor}`} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{action.title}</p>
-                  <p className="text-xs text-slate-500">{action.description}</p>
+                  <p className="text-sm font-medium break-words">{action.title}</p>
+                  <p className="text-xs text-slate-500 break-words">{action.description}</p>
                 </div>
                 <span className={`badge ${action.badgeClass}`}>{action.status}</span>
               </div>
@@ -151,7 +151,7 @@ function QuickAction({
   return (
     <a
       href={href}
-      className="flex items-center gap-3 px-4 py-3 rounded-lg border border-slate-800 hover:border-slate-700 hover:bg-slate-800/50 transition-colors"
+      className="flex items-center gap-3 px-4 py-3 rounded-lg border border-slate-800 hover:border-slate-700 hover:bg-slate-800/50 transition-colors min-h-[44px] focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 focus:ring-offset-slate-900"
     >
       <Icon className="h-5 w-5 text-slate-400" />
       <span className="text-sm font-medium">{children}</span>

@@ -2,23 +2,23 @@ import Link from "next/link";
 
 export default function DailyPlanPage() {
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 sm:p-6 space-y-6">
       {/* Page header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <Link href="/taskflow" className="text-sm text-slate-400 hover:text-slate-300 mb-2 inline-flex items-center gap-1">
+          <Link href="/taskflow" className="text-sm text-slate-400 hover:text-slate-300 mb-2 inline-flex items-center gap-1 min-h-[44px] focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 focus:ring-offset-slate-900">
             <ArrowLeftIcon className="h-4 w-4" />
             Back to TaskFlow
           </Link>
           <h1 className="text-2xl font-bold mt-2">Daily Plan</h1>
           <p className="text-slate-400 mt-1">AI-generated prioritized task list for today</p>
         </div>
-        <div className="flex items-center gap-3">
-          <button className="btn-secondary">
+        <div className="flex items-center gap-3 flex-wrap">
+          <button className="btn-secondary min-h-[44px] px-4">
             <RefreshIcon className="h-4 w-4" />
             Regenerate
           </button>
-          <button className="btn-primary">
+          <button className="btn-primary min-h-[44px] px-4">
             <CheckIcon className="h-4 w-4" />
             Approve Plan
           </button>
@@ -89,13 +89,13 @@ export default function DailyPlanPage() {
 
               {/* Task info */}
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <h3 className="font-medium">{task.title}</h3>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="font-medium break-words">{task.title}</h3>
                   {task.aiReason && (
-                    <span className="badge badge-info text-xs">{task.aiReason}</span>
+                    <span className="badge badge-info text-xs flex-shrink-0">{task.aiReason}</span>
                   )}
                 </div>
-                <p className="text-sm text-slate-500 mt-0.5">
+                <p className="text-sm text-slate-500 mt-0.5 break-words">
                   {task.project} • {task.estimatedTime}
                 </p>
               </div>
@@ -107,14 +107,14 @@ export default function DailyPlanPage() {
 
               {/* Actions */}
               <div className="flex items-center gap-1">
-                <button className="btn-ghost p-1.5" title="Move up">
-                  <ChevronUpIcon className="h-4 w-4" />
+                <button className="btn-ghost p-2 min-h-[44px] min-w-[44px] focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 focus:ring-offset-slate-900" aria-label="Move up">
+                  <ChevronUpIcon className="h-5 w-5" />
                 </button>
-                <button className="btn-ghost p-1.5" title="Move down">
-                  <ChevronDownIcon className="h-4 w-4" />
+                <button className="btn-ghost p-2 min-h-[44px] min-w-[44px] focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 focus:ring-offset-slate-900" aria-label="Move down">
+                  <ChevronDownIcon className="h-5 w-5" />
                 </button>
-                <button className="btn-ghost p-1.5" title="Remove from plan">
-                  <XIcon className="h-4 w-4" />
+                <button className="btn-ghost p-2 min-h-[44px] min-w-[44px] focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 focus:ring-offset-slate-900" aria-label="Remove from plan">
+                  <XIcon className="h-5 w-5" />
                 </button>
               </div>
             </div>
@@ -131,25 +131,25 @@ export default function DailyPlanPage() {
           </h2>
         </div>
         <div className="card-body">
-          <p className="text-slate-300 leading-relaxed">
+          <p className="text-slate-300 leading-relaxed break-words">
             I've prioritized today's tasks based on the following factors:
           </p>
           <ul className="mt-4 space-y-2 text-sm text-slate-400">
             <li className="flex items-start gap-2">
               <CheckIcon className="h-4 w-4 text-emerald-400 mt-0.5 flex-shrink-0" />
-              <span><strong className="text-slate-300">HVAC installation</strong> is urgent due to Friday's inspection deadline</span>
+              <span className="break-words"><strong className="text-slate-300">HVAC installation</strong> is urgent due to Friday's inspection deadline</span>
             </li>
             <li className="flex items-start gap-2">
               <CheckIcon className="h-4 w-4 text-emerald-400 mt-0.5 flex-shrink-0" />
-              <span><strong className="text-slate-300">Window order</strong> requires immediate attention to meet lead times</span>
+              <span className="break-words"><strong className="text-slate-300">Window order</strong> requires immediate attention to meet lead times</span>
             </li>
             <li className="flex items-start gap-2">
               <CheckIcon className="h-4 w-4 text-emerald-400 mt-0.5 flex-shrink-0" />
-              <span>Grouped tasks by project location to minimize travel time</span>
+              <span className="break-words">Grouped tasks by project location to minimize travel time</span>
             </li>
             <li className="flex items-start gap-2">
               <CheckIcon className="h-4 w-4 text-emerald-400 mt-0.5 flex-shrink-0" />
-              <span>Total estimated time (6.5 hours) fits within standard work day</span>
+              <span className="break-words">Total estimated time (6.5 hours) fits within standard work day</span>
             </li>
           </ul>
         </div>

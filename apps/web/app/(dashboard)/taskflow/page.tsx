@@ -52,19 +52,19 @@ export default function TaskFlowPage() {
   }, [statusFilter, sourceFilter, priorityFilter, tasks]);
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 sm:p-6 space-y-6">
       {/* Page header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold">TaskFlow</h1>
           <p className="text-slate-400 mt-1">Manage tasks from voice, photo, or text with AI-powered daily plans</p>
         </div>
-        <div className="flex items-center gap-3">
-          <Link href="/taskflow/daily-plan" className="btn-secondary">
+        <div className="flex items-center gap-3 flex-wrap">
+          <Link href="/taskflow/daily-plan" className="btn-secondary min-h-[44px] px-4">
             <CalendarIcon className="h-4 w-4" />
             Daily Plan
           </Link>
-          <Link href="/taskflow/new" className="btn-primary">
+          <Link href="/taskflow/new" className="btn-primary min-h-[44px] px-4">
             <PlusIcon className="h-4 w-4" />
             New Task
           </Link>
@@ -119,7 +119,7 @@ export default function TaskFlowPage() {
           </FilterButton>
         </div>
         <select 
-          className="input w-auto text-sm"
+          className="input w-full sm:w-auto text-sm min-h-[44px]"
           value={sourceFilter}
           onChange={(e) => setSourceFilter(e.target.value as TaskSource)}
         >
@@ -130,7 +130,7 @@ export default function TaskFlowPage() {
           <option value="manual">Manual</option>
         </select>
         <select 
-          className="input w-auto text-sm"
+          className="input w-full sm:w-auto text-sm min-h-[44px]"
           value={priorityFilter}
           onChange={(e) => setPriorityFilter(e.target.value as TaskPriority)}
         >
@@ -144,7 +144,7 @@ export default function TaskFlowPage() {
         {/* Clear filters button */}
         {(statusFilter !== "all" || sourceFilter || priorityFilter) && (
           <button 
-            className="text-sm text-slate-400 hover:text-white transition-colors"
+            className="text-sm text-slate-400 hover:text-white transition-colors min-h-[44px] px-3 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 focus:ring-offset-slate-900"
             onClick={() => {
               setStatusFilter("all");
               setSourceFilter("");
@@ -223,7 +223,7 @@ function FilterButton({
   return (
     <button
       onClick={onClick}
-      className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
+      className={`px-3 py-2 text-sm rounded-md transition-colors min-h-[44px] focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 focus:ring-offset-slate-900 ${
         active
           ? "bg-slate-700 text-white"
           : "text-slate-400 hover:text-white hover:bg-slate-800"
@@ -269,11 +269,11 @@ function TaskCard({
         {/* Checkbox */}
         <button 
           onClick={onToggleStatus}
-          className={`mt-1 h-5 w-5 rounded border ${
+          className={`mt-1 h-6 w-6 rounded border flex-shrink-0 ${
             task.status === "completed" 
               ? "bg-emerald-500 border-emerald-500 hover:bg-emerald-600" 
               : "border-slate-600 hover:border-slate-500 hover:bg-slate-700/50"
-          } flex items-center justify-center transition-colors cursor-pointer`}
+          } flex items-center justify-center transition-colors cursor-pointer min-h-[44px] min-w-[44px] focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 focus:ring-offset-slate-900`}
           aria-label={task.status === "completed" ? "Mark as incomplete" : "Mark as complete"}
         >
           {task.status === "completed" && (
@@ -292,7 +292,7 @@ function TaskCard({
             )}
           </div>
           {task.description && (
-            <p className="text-sm text-slate-400 mb-2">{task.description}</p>
+            <p className="text-sm text-slate-400 mb-2 break-words">{task.description}</p>
           )}
           <div className="flex items-center gap-4 text-xs text-slate-500">
             <span className="flex items-center gap-1">
@@ -319,8 +319,8 @@ function TaskCard({
           <span className={`badge ${statusColors[task.status as keyof typeof statusColors]}`}>
             {task.status.replace("_", " ")}
           </span>
-          <button className="btn-ghost p-1.5">
-            <DotsIcon className="h-4 w-4" />
+          <button className="btn-ghost p-2 min-h-[44px] min-w-[44px] focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 focus:ring-offset-slate-900">
+            <DotsIcon className="h-5 w-5" />
           </button>
         </div>
       </div>
