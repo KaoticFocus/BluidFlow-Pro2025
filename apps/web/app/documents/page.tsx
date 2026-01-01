@@ -1,3 +1,10 @@
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Document Intelligence - BuildFlow Pro",
+  description: "OCR, classify, and extract structured data from documents with human-in-the-loop review",
+};
+
 export default function DocumentsPage() {
   return (
     <div className="min-h-screen-safe bg-slate-950 text-slate-100 p-4 sm:p-6">

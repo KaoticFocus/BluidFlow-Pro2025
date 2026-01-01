@@ -1,3 +1,10 @@
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "ScheduleFlow - BuildFlow Pro",
+  description: "Generate baseline schedules, track constraints, and send approval-gated notifications to crews",
+};
+
 export default function ScheduleFlowPage() {
   return (
     <div className="min-h-screen-safe bg-slate-950 text-slate-100 p-4 sm:p-6">

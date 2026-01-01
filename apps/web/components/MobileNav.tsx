@@ -28,11 +28,11 @@ export function MobileNav({ userName, userInitial, userEmail }: MobileNavProps) 
       <button
         ref={hamburgerRef}
         onClick={() => setIsOpen(true)}
-        className="md:hidden fixed top-4 left-4 z-50 w-11 h-11 rounded-lg bg-slate-800/90 backdrop-blur-sm border border-slate-700 flex items-center justify-center text-white hover:bg-slate-700 transition-colors focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 focus:ring-offset-slate-950"
+        className="md:hidden fixed top-4 left-4 z-[100] w-11 h-11 rounded-lg bg-slate-800/95 backdrop-blur-sm border border-slate-700 shadow-lg flex items-center justify-center text-white hover:bg-slate-700 hover:border-slate-600 transition-all focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 focus:ring-offset-slate-950 min-h-[44px] min-w-[44px]"
         aria-label="Open menu"
       >
-        <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+        <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
         </svg>
       </button>
 

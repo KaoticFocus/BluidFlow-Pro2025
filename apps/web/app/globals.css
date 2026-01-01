@@ -4,6 +4,23 @@
 :root {
   --font-sans: 'Outfit', system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
+  color-scheme: light dark;
+}
+
+/* Safe area insets and base resets */
+html, body {
+  height: 100%;
+  overflow-x: hidden;
+}
+
+body {
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Prevent global x-overflow */
+html, body, #__next {
+  overflow-x: hidden;
 }
 
 @layer base {

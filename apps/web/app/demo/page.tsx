@@ -1,3 +1,10 @@
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Demo - BuildFlow Pro",
+  description: "Watch a demo of BuildFlow Pro's key features",
+};
+
 export default function DemoPage() {
   return (
     <div className="min-h-screen-safe bg-slate-950 text-slate-100 p-4 sm:p-6">
