@@ -63,24 +63,30 @@ export default function HomePage() {
 
           {/* Feature Grid */}
           <div className="mt-32 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {features.map((feature) => (
-              <Link 
-                key={feature.name} 
-                href={feature.href}
-                prefetch={feature.href.startsWith('/admin') ? true : false}
-                className="card p-6 group hover:border-slate-700 transition-all hover:shadow-lg hover:shadow-slate-900/50"
-              >
-                <div className={`h-10 w-10 rounded-lg ${feature.iconBg} flex items-center justify-center mb-4`}>
-                  <feature.icon className={`h-5 w-5 ${feature.iconColor}`} />
-                </div>
-                <h3 className="text-lg font-semibold mb-2 group-hover:text-cyan-400 transition-colors">
-                  {feature.name}
-                </h3>
-                <p className="text-slate-400 text-sm leading-relaxed">
-                  {feature.description}
-                </p>
-              </Link>
-            ))}
+            {features.map((feature) => {
+              // Disable prefetching for public module routes to prevent RSC 404 errors
+              const publicModuleRoutes = ['/demo', '/scheduleflow', '/timeclockflow', '/documents'];
+              const shouldPrefetch = !publicModuleRoutes.includes(feature.href);
+              
+              return (
+                <Link 
+                  key={feature.name} 
+                  href={feature.href}
+                  prefetch={shouldPrefetch}
+                  className="card p-6 group hover:border-slate-700 transition-all hover:shadow-lg hover:shadow-slate-900/50"
+                >
+                  <div className={`h-10 w-10 rounded-lg ${feature.iconBg} flex items-center justify-center mb-4`}>
+                    <feature.icon className={`h-5 w-5 ${feature.iconColor}`} />
+                  </div>
+                  <h3 className="text-lg font-semibold mb-2 group-hover:text-cyan-400 transition-colors">
+                    {feature.name}
+                  </h3>
+                  <p className="text-slate-400 text-sm leading-relaxed">
+                    {feature.description}
+                  </p>
+                </Link>
+              );
+            })}
           </div>
         </div>
       </main>
