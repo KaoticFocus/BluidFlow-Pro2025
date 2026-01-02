@@ -23,6 +23,21 @@ html, body, #__next {
   overflow-x: hidden;
 }
 
+/* Ensure images and media don't overflow */
+img, video, canvas, svg {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Safe area utility classes */
+.safe-top {
+  padding-top: env(safe-area-inset-top);
+}
+
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
 @layer base {
   * {
     @apply border-slate-800;

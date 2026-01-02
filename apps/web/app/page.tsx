@@ -62,7 +62,7 @@ export default function HomePage() {
           </div>
 
           {/* Feature Grid */}
-          <div className="mt-32 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="mt-32 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 min-w-0">
             {features.map((feature) => {
               // Disable prefetching for public module routes to prevent RSC 404 errors
               const publicModuleRoutes = ['/demo', '/scheduleflow', '/timeclockflow', '/documents'];
@@ -73,7 +73,7 @@ export default function HomePage() {
                   key={feature.name} 
                   href={feature.href}
                   prefetch={shouldPrefetch}
-                  className="card p-6 group hover:border-slate-700 transition-all hover:shadow-lg hover:shadow-slate-900/50"
+                  className="card p-6 group hover:border-slate-700 transition-all hover:shadow-lg hover:shadow-slate-900/50 w-full max-w-full overflow-hidden min-w-0"
                 >
                   <div className={`h-10 w-10 rounded-lg ${feature.iconBg} flex items-center justify-center mb-4`}>
                     <feature.icon className={`h-5 w-5 ${feature.iconColor}`} />

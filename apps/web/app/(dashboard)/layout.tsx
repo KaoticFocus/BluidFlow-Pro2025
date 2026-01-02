@@ -28,7 +28,7 @@ export default async function DashboardLayout({
       <MobileNav userName={userName} userInitial={userInitial} userEmail={user.email || ''} />
 
       {/* Sidebar - hidden on mobile */}
-      <aside className="hidden md:flex w-64 bg-slate-800/50 border-r border-slate-700/50 flex-col">
+      <aside className="hidden md:flex w-64 bg-slate-800/50 border-r border-slate-700/50 flex-col shrink-0 overflow-y-auto">
         {/* Logo */}
         <div className="p-4 border-b border-slate-700/50">
           <Link href="/dashboard" className="flex items-center gap-2">
@@ -72,7 +72,7 @@ export default async function DashboardLayout({
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 overflow-auto md:ml-0 pt-16 md:pt-0">
+      <main className="flex-1 overflow-auto md:ml-0 pt-16 md:pt-0 min-w-0">
         {children}
       </main>
     </div>
@@ -108,9 +108,14 @@ function NavItem({ href, icon, children }: { href: string; icon: string; childre
     ),
   }
 
+  // Disable prefetching for deferred routes
+  const deferredRoutes = ['/scheduleflow', '/timeclockflow', '/documents', '/demo'];
+  const shouldPrefetch = !deferredRoutes.includes(href);
+
   return (
     <Link
       href={href}
+      prefetch={shouldPrefetch}
       className="flex items-center gap-3 px-3 py-2 text-slate-300 hover:text-white hover:bg-slate-700/50 rounded-lg transition-colors min-h-[44px] focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 focus:ring-offset-slate-950"
     >
       {icons[icon]}

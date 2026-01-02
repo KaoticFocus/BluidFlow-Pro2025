@@ -5,7 +5,11 @@ export const metadata: Metadata = {
   title: "BuildFlow Pro",
   description: "AI-powered construction management platform",
   icons: {
-    icon: '/favicon.ico',
+    icon: [
+      { url: '/favicon.png', type: 'image/png' },
+      { url: '/favicon.svg', type: 'image/svg+xml' },
+    ],
+    apple: [{ url: '/apple-touch-icon.png' }],
   },
 };
 
@@ -31,7 +35,9 @@ export default function RootLayout({
         />
       </head>
       <body className="min-h-screen-safe overflow-x-hidden bg-slate-950 font-sans text-slate-100 antialiased">
-        {children}
+        <div className="pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] min-h-screen-safe">
+          {children}
+        </div>
       </body>
     </html>
   );
