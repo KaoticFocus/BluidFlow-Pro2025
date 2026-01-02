@@ -55,7 +55,7 @@ export default function HomePage() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
                 </svg>
               </Link>
-              <Link href="/demo" className="btn-secondary text-base px-6 py-3">
+              <Link href="/demo" prefetch={false} className="btn-secondary text-base px-6 py-3">
                 Watch Demo
               </Link>
             </div>
@@ -67,6 +67,7 @@ export default function HomePage() {
               <Link 
                 key={feature.name} 
                 href={feature.href}
+                prefetch={feature.href.startsWith('/admin') ? true : false}
                 className="card p-6 group hover:border-slate-700 transition-all hover:shadow-lg hover:shadow-slate-900/50"
               >
                 <div className={`h-10 w-10 rounded-lg ${feature.iconBg} flex items-center justify-center mb-4`}>

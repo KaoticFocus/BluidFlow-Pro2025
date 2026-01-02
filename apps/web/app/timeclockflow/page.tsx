@@ -5,6 +5,9 @@ export const metadata: Metadata = {
   description: "Mobile-first timeclock with anomaly detection, reminders, and immutable audit trails",
 };
 
+// Ensure this page is statically generated
+export const dynamic = 'force-static';
+
 export default function TimeClockFlowPage() {
   return (
     <div className="min-h-screen-safe bg-slate-950 text-slate-100 p-4 sm:p-6">

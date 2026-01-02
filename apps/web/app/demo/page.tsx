@@ -5,6 +5,9 @@ export const metadata: Metadata = {
   description: "Watch a demo of BuildFlow Pro's key features",
 };
 
+// Ensure this page is statically generated
+export const dynamic = 'force-static';
+
 export default function DemoPage() {
   return (
     <div className="min-h-screen-safe bg-slate-950 text-slate-100 p-4 sm:p-6">
