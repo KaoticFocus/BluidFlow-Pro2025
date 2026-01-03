@@ -15,3 +15,4 @@ Checks
 - Tap targets ≥ 44×44
 - Keyboard does not overlap inputs
 - Dialogs/sheets usable one‑handed
+

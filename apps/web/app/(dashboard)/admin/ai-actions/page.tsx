@@ -1,20 +1,20 @@
 export default function AIActionsPage() {
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 sm:p-6 space-y-6">
       {/* Page header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold">AI Action Log</h1>
           <p className="text-slate-400 mt-1">Review and approve AI-generated content before external actions</p>
         </div>
-        <div className="flex items-center gap-3">
-          <select className="input w-auto text-sm">
+        <div className="flex items-center gap-3 flex-wrap">
+          <select className="input w-full sm:w-auto text-sm min-h-[44px]">
             <option value="all">All Status</option>
             <option value="proposed">Needs Review</option>
             <option value="approved">Approved</option>
             <option value="rejected">Rejected</option>
           </select>
-          <button className="btn-secondary text-sm">
+          <button className="btn-secondary text-sm min-h-[44px] px-4">
             <FilterIcon className="h-4 w-4" />
             Filters
           </button>
@@ -41,9 +41,70 @@ export default function AIActionsPage() {
         </div>
       </div>
 
-      {/* Actions table */}
+      {/* Actions - Mobile cards / Desktop table */}
       <div className="card overflow-hidden">
-        <div className="overflow-x-auto">
+        {/* Mobile: Card layout */}
+        <div className="md:hidden space-y-3 p-4">
+          {mockActions.map((action) => (
+            <div key={action.id} className="card p-4 space-y-3">
+              {/* Header */}
+              <div className="flex items-start gap-3">
+                <div className={`h-10 w-10 rounded-lg ${action.iconBg} flex items-center justify-center flex-shrink-0`}>
+                  <action.icon className={`h-5 w-5 ${action.iconColor}`} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-sm font-medium text-white break-words">{action.title}</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">{action.outputKind}</p>
+                </div>
+                <span className={`badge ${action.statusBadge} flex-shrink-0`}>
+                  {action.status}
+                </span>
+              </div>
+
+              {/* Metadata */}
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div>
+                  <p className="text-slate-500">Model</p>
+                  <p className="text-slate-300 mt-0.5 break-words">{action.model}</p>
+                </div>
+                <div>
+                  <p className="text-slate-500">Actor</p>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <div className="h-5 w-5 rounded-full bg-slate-700 flex items-center justify-center text-xs flex-shrink-0">
+                      {action.actor[0]}
+                    </div>
+                    <p className="text-slate-300 truncate">{action.actor}</p>
+                  </div>
+                </div>
+                <div>
+                  <p className="text-slate-500">Tokens</p>
+                  <p className="text-slate-300 mt-0.5">{action.tokens.toLocaleString()}</p>
+                </div>
+                <div>
+                  <p className="text-slate-500">Cost</p>
+                  <p className="text-slate-300 mt-0.5">${action.cost.toFixed(4)}</p>
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center gap-2 pt-2 border-t border-slate-800">
+                {action.status === "Needs Review" && (
+                  <>
+                    <button className="btn-primary text-xs px-4 py-2.5 flex-1 min-h-[44px]">Approve</button>
+                    <button className="btn-ghost text-xs px-4 py-2.5 text-red-400 hover:text-red-300 min-h-[44px]">Reject</button>
+                  </>
+                )}
+                <button className="btn-ghost text-xs px-3 py-2.5 min-h-[44px] min-w-[44px]">
+                  <EyeIcon className="h-4 w-4" />
+                </button>
+              </div>
+              <p className="text-xs text-slate-500">{action.time}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* Desktop: Table layout */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full">
             <thead>
               <tr className="border-b border-slate-800 text-left">
@@ -100,11 +161,11 @@ export default function AIActionsPage() {
                     <div className="flex items-center gap-2">
                       {action.status === "Needs Review" && (
                         <>
-                          <button className="btn-primary text-xs px-3 py-1.5">Approve</button>
-                          <button className="btn-ghost text-xs px-3 py-1.5 text-red-400 hover:text-red-300">Reject</button>
+                          <button className="btn-primary text-xs px-3 py-1.5 min-h-[44px]">Approve</button>
+                          <button className="btn-ghost text-xs px-3 py-1.5 text-red-400 hover:text-red-300 min-h-[44px]">Reject</button>
                         </>
                       )}
-                      <button className="btn-ghost text-xs px-2 py-1.5">
+                      <button className="btn-ghost text-xs px-2 py-1.5 min-h-[44px] min-w-[44px]">
                         <EyeIcon className="h-4 w-4" />
                       </button>
                     </div>

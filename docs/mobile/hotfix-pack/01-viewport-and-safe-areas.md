@@ -31,3 +31,4 @@ body { padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inse
 /* Prevent global x-overflow */
 html, body, #__next { overflow-x: hidden; }
 ```
+

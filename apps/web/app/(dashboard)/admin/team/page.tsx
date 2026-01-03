@@ -2,14 +2,14 @@ import Link from "next/link";
 
 export default function TeamPage() {
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 sm:p-6 space-y-6">
       {/* Page header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold">Team</h1>
           <p className="text-slate-400 mt-1">Manage team members and their roles</p>
         </div>
-        <button className="btn-primary">
+        <button className="btn-primary min-h-[44px] px-4">
           <PlusIcon className="h-4 w-4" />
           Invite Member
         </button>
@@ -36,15 +36,47 @@ export default function TeamPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center gap-2 border-b border-slate-800">
+      <div className="flex items-center gap-2 border-b border-slate-800 overflow-x-auto">
         <Tab active>Members</Tab>
         <Tab>Invitations</Tab>
         <Tab>Roles</Tab>
       </div>
 
-      {/* Members table */}
+      {/* Members - Mobile cards / Desktop table */}
       <div className="card overflow-hidden">
-        <div className="overflow-x-auto">
+        {/* Mobile: Card layout */}
+        <div className="md:hidden space-y-3 p-4">
+          {mockMembers.map((member) => (
+            <div key={member.id} className="card p-4 space-y-3">
+              {/* Header */}
+              <div className="flex items-start gap-3">
+                <div className={`h-12 w-12 rounded-full ${member.avatarBg} flex items-center justify-center font-medium flex-shrink-0`}>
+                  {member.initials}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-medium text-white break-words">{member.name}</h3>
+                  <p className="text-sm text-slate-500 mt-0.5 break-words">{member.email}</p>
+                </div>
+                <button className="btn-ghost p-2 min-h-[44px] min-w-[44px] flex-shrink-0">
+                  <DotsIcon className="h-5 w-5" />
+                </button>
+              </div>
+
+              {/* Metadata */}
+              <div className="flex items-center gap-4 flex-wrap">
+                <span className={`badge ${member.roleBadge}`}>{member.role}</span>
+                <div className="flex items-center gap-2">
+                  <span className={`status-dot ${member.isOnline ? "status-dot-success" : "bg-slate-600"}`} />
+                  <span className="text-sm text-slate-400">{member.isOnline ? "Online" : "Offline"}</span>
+                </div>
+                <span className="text-sm text-slate-500">Last active: {member.lastActive}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Desktop: Table layout */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full">
             <thead>
               <tr className="border-b border-slate-800 text-left">
@@ -82,7 +114,7 @@ export default function TeamPage() {
                     <span className="text-sm text-slate-400">{member.lastActive}</span>
                   </td>
                   <td className="px-4 py-4">
-                    <button className="btn-ghost p-1.5">
+                    <button className="btn-ghost p-1.5 min-h-[44px] min-w-[44px]">
                       <DotsIcon className="h-4 w-4" />
                     </button>
                   </td>
@@ -102,7 +134,7 @@ export default function TeamPage() {
 function Tab({ children, active }: { children: React.ReactNode; active?: boolean }) {
   return (
     <button
-      className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+      className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors min-h-[44px] focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 focus:ring-offset-slate-900 ${
         active
           ? "border-cyan-500 text-white"
           : "border-transparent text-slate-400 hover:text-white"

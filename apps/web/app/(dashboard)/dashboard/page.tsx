@@ -1,6 +1,6 @@
 export default function DashboardPage() {
   return (
-    <div className="p-6 space-y-8">
+    <div className="p-4 sm:p-6 space-y-8">
       {/* Page header */}
       <div>
         <h1 className="text-2xl font-bold">Dashboard</h1>
@@ -8,7 +8,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Stats grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 min-w-0">
         <StatCard
           title="Open Tasks"
           value="24"
@@ -48,9 +48,9 @@ export default function DashboardPage() {
       </div>
 
       {/* Main content grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 min-w-0">
         {/* Recent AI Actions */}
-        <div className="lg:col-span-2 card">
+        <div className="lg:col-span-2 card w-full max-w-full overflow-hidden min-w-0">
           <div className="card-header flex items-center justify-between">
             <h2 className="font-semibold">Recent AI Actions</h2>
             <a href="/admin/ai-actions" className="text-sm text-cyan-400 hover:text-cyan-300">
@@ -64,8 +64,8 @@ export default function DashboardPage() {
                   <action.icon className={`h-5 w-5 ${action.statusColor}`} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{action.title}</p>
-                  <p className="text-xs text-slate-500">{action.description}</p>
+                  <p className="text-sm font-medium break-words">{action.title}</p>
+                  <p className="text-xs text-slate-500 break-words">{action.description}</p>
                 </div>
                 <span className={`badge ${action.badgeClass}`}>{action.status}</span>
               </div>
@@ -74,7 +74,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Quick actions */}
-        <div className="card">
+        <div className="card w-full max-w-full overflow-hidden min-w-0">
           <div className="card-header">
             <h2 className="font-semibold">Quick Actions</h2>
           </div>
@@ -124,7 +124,7 @@ function StatCard({
   };
 
   return (
-    <div className="card p-5">
+    <div className="card p-5 w-full max-w-full overflow-hidden min-w-0">
       <div className="flex items-center gap-4">
         <div className={`h-12 w-12 rounded-xl ${iconBg} flex items-center justify-center`}>
           <Icon className={`h-6 w-6 ${iconColor}`} />
@@ -151,7 +151,7 @@ function QuickAction({
   return (
     <a
       href={href}
-      className="flex items-center gap-3 px-4 py-3 rounded-lg border border-slate-800 hover:border-slate-700 hover:bg-slate-800/50 transition-colors"
+      className="flex items-center gap-3 px-4 py-3 rounded-lg border border-slate-800 hover:border-slate-700 hover:bg-slate-800/50 transition-colors min-h-[44px] focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 focus:ring-offset-slate-900"
     >
       <Icon className="h-5 w-5 text-slate-400" />
       <span className="text-sm font-medium">{children}</span>

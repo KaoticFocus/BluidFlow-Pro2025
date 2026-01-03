@@ -45,3 +45,4 @@ Performance Quick Wins
 
 QA
 - Validate on iPhone 12/13 mini (360px) and Pixel 6; ensure no horizontal scroll anywhere.
+
