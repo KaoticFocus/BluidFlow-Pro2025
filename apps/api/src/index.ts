@@ -19,6 +19,7 @@ import { meetings } from "./routes/meetings";
 import { internalEvents } from "./routes/internal/events";
 import { docs } from "./routes/docs";
 import { registerOpenApiPaths } from "./lib/openapi-paths";
+import { home } from "./routes/home";
 
 const app = new Hono();
 
@@ -105,6 +106,10 @@ app.route("/v1/taskflow", taskflowRoutes);
 // MeetingFlow routes
 app.route("/v1/meetings", meetings);
 
+// Home routes (v1 + legacy path)
+app.route("/v1/home", home);
+app.route("/home", home);
+
 // Internal service routes (require service auth)
 app.route("/internal", internalEvents);
 
@@ -135,9 +140,7 @@ app.onError((err, c) => {
 
   // Don't expose internal errors in production
   const message =
-    process.env.NODE_ENV === "production"
-      ? "Internal server error"
-      : err.message;
+    process.env.NODE_ENV === "production" ? "Internal server error" : err.message;
 
   return c.json(
     {
