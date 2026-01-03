@@ -9,116 +9,158 @@ export default function DashboardPage() {
         <p className="text-slate-400 mt-1">Welcome back! Here's what's happening today.</p>
       </div>
 
-      {/* Stats grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 min-w-0">
-        <StatCard
-          title="Open Tasks"
-          value="24"
-          change="+3 from yesterday"
-          changeType="neutral"
+      {/* KPI Stats grid - all cards are clickable deep links */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 min-w-0">
+        <KPICard
+          href="/taskflow?status=overdue"
+          title="Overdue Tasks"
+          value={7}
+          delta="+2 since yesterday"
+          deltaType="negative"
+          icon={OverdueIcon}
+          iconBg="bg-red-500/10"
+          iconColor="text-red-400"
+          ariaLabel="Open Overdue Tasks list (7)"
+        />
+        <KPICard
+          href="/taskflow?due=today"
+          title="Tasks Due Today"
+          value={5}
+          delta="3 in progress"
+          deltaType="neutral"
           icon={TaskIcon}
           iconBg="bg-cyan-500/10"
           iconColor="text-cyan-400"
+          ariaLabel="Open Tasks Due Today list (5)"
         />
-        <StatCard
-          title="Pending Approvals"
-          value="8"
-          change="4 AI actions need review"
-          changeType="warning"
-          icon={AIIcon}
-          iconBg="bg-amber-500/10"
-          iconColor="text-amber-400"
-        />
-        <StatCard
-          title="Today's Meetings"
-          value="3"
-          change="Next: Project standup @ 2pm"
-          changeType="neutral"
+        <KPICard
+          href="/meetingflow?status=review_pending"
+          title="Meetings Pending Review"
+          value={3}
+          delta="1 from this week"
+          deltaType="warning"
           icon={MeetingIcon}
           iconBg="bg-violet-500/10"
           iconColor="text-violet-400"
+          ariaLabel="Open Meetings awaiting review (3)"
         />
-        <StatCard
-          title="Team Online"
-          value="12"
-          change="of 15 members"
-          changeType="positive"
-          icon={UsersIcon}
-          iconBg="bg-emerald-500/10"
-          iconColor="text-emerald-400"
+        <KPICard
+          href="/admin/ai-actions?needsReview=true"
+          title="AI Actions Pending"
+          value={4}
+          delta="Needs your review"
+          deltaType="warning"
+          icon={AIIcon}
+          iconBg="bg-amber-500/10"
+          iconColor="text-amber-400"
+          ariaLabel="Open AI Actions needing review (4)"
         />
       </div>
 
       {/* Main content grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 min-w-0">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 min-w-0">
         {/* Recent AI Actions */}
         <div className="lg:col-span-2 card w-full max-w-full overflow-hidden min-w-0">
-          <div className="card-header flex items-center justify-between">
-            <h2 className="font-semibold">Recent AI Actions</h2>
-            <Link href="/admin/ai-actions" className="text-sm text-cyan-400 hover:text-cyan-300">
-              View all
-            </Link>
-          </div>
+          <SectionHeader title="Recent AI Actions" viewAllHref="/admin/ai-actions" viewAllLabel="View all AI Actions" />
           <div className="divide-y divide-slate-800">
-            {aiActions.map((action) => (
-              <div key={action.id} className="p-4 flex items-center gap-4">
-                <div className={`h-10 w-10 rounded-lg ${action.statusBg} flex items-center justify-center`}>
+            {recentAIActions.map((action) => (
+              <Link
+                key={action.id}
+                href={`/admin/ai-actions/${action.id}`}
+                className="p-4 flex items-center gap-4 hover:bg-slate-800/50 transition-colors focus:outline-none focus:ring-2 focus:ring-inset focus:ring-cyan-500 min-h-[64px]"
+                aria-label={`View ${action.title} - ${action.status}`}
+              >
+                <div className={`h-10 w-10 rounded-lg ${action.statusBg} flex items-center justify-center shrink-0`}>
                   <action.icon className={`h-5 w-5 ${action.statusColor}`} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium break-words">{action.title}</p>
-                  <p className="text-xs text-slate-500 break-words">{action.description}</p>
+                  <p className="text-sm font-medium truncate">{action.title}</p>
+                  <p className="text-xs text-slate-500 truncate">{action.description}</p>
                 </div>
-                <span className={`badge ${action.badgeClass}`}>{action.status}</span>
-              </div>
+                <span className={`badge shrink-0 ${action.badgeClass}`}>{action.status}</span>
+                <ChevronRightIcon className="h-4 w-4 text-slate-500 shrink-0" />
+              </Link>
             ))}
           </div>
         </div>
 
-        {/* Quick actions */}
+        {/* Recent Tasks */}
         <div className="card w-full max-w-full overflow-hidden min-w-0">
-          <div className="card-header">
-            <h2 className="font-semibold">Quick Actions</h2>
+          <SectionHeader title="Today's Tasks" viewAllHref="/taskflow?due=today" viewAllLabel="View all tasks due today" />
+          <div className="divide-y divide-slate-800">
+            {recentTasks.map((task) => (
+              <Link
+                key={task.id}
+                href={`/taskflow/${task.id}`}
+                className="p-4 flex items-center gap-3 hover:bg-slate-800/50 transition-colors focus:outline-none focus:ring-2 focus:ring-inset focus:ring-cyan-500 min-h-[56px]"
+                aria-label={`View task: ${task.title} - ${task.status}`}
+              >
+                <div className={`h-8 w-8 rounded-lg ${task.statusBg} flex items-center justify-center shrink-0`}>
+                  <TaskIcon className={`h-4 w-4 ${task.statusColor}`} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">{task.title}</p>
+                  <p className="text-xs text-slate-500">{task.dueTime}</p>
+                </div>
+                <span className={`badge text-xs shrink-0 ${task.badgeClass}`}>{task.status}</span>
+              </Link>
+            ))}
           </div>
-          <div className="p-4 space-y-2">
-            <QuickAction href="/taskflow/new" icon={PlusIcon}>
-              Create Task
-            </QuickAction>
-            <QuickAction href="/meetingflow/new" icon={MicIcon}>
-              Start Recording
-            </QuickAction>
-            <QuickAction href="/documents/upload" icon={UploadIcon}>
-              Upload Document
-            </QuickAction>
-            <QuickAction href="/admin/team/invite" icon={UserPlusIcon}>
-              Invite Team Member
-            </QuickAction>
-          </div>
+        </div>
+      </div>
+
+      {/* Quick Actions */}
+      <div className="card w-full max-w-full overflow-hidden min-w-0">
+        <SectionHeader title="Quick Actions" />
+        <div className="p-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <QuickAction href="/taskflow/new" icon={PlusIcon}>
+            Create Task
+          </QuickAction>
+          <QuickAction href="/meetingflow" icon={MicIcon}>
+            Start Recording
+          </QuickAction>
+          <QuickAction href="/documents" icon={UploadIcon}>
+            Upload Document
+          </QuickAction>
+          <QuickAction href="/admin/team" icon={UserPlusIcon}>
+            Manage Team
+          </QuickAction>
         </div>
       </div>
     </div>
   );
 }
 
+// ============================================================================
 // Components
-function StatCard({
+// ============================================================================
+
+/**
+ * KPI Card - Fully clickable card that navigates to a filtered list view
+ * Per PRD: All KPI cards must be clickable and route to pre-filtered detail views
+ */
+function KPICard({
+  href,
   title,
   value,
-  change,
-  changeType,
+  delta,
+  deltaType,
   icon: Icon,
   iconBg,
   iconColor,
+  ariaLabel,
 }: {
+  href: string;
   title: string;
-  value: string;
-  change: string;
-  changeType: "positive" | "negative" | "neutral" | "warning";
+  value: number;
+  delta: string;
+  deltaType: "positive" | "negative" | "neutral" | "warning";
   icon: React.FC<{ className?: string }>;
   iconBg: string;
   iconColor: string;
+  ariaLabel: string;
 }) {
-  const changeColors = {
+  const deltaColors = {
     positive: "text-emerald-400",
     negative: "text-red-400",
     neutral: "text-slate-400",
@@ -126,21 +168,60 @@ function StatCard({
   };
 
   return (
-    <div className="card p-5 w-full max-w-full overflow-hidden min-w-0">
-      <div className="flex items-center gap-4">
-        <div className={`h-12 w-12 rounded-xl ${iconBg} flex items-center justify-center`}>
-          <Icon className={`h-6 w-6 ${iconColor}`} />
+    <Link
+      href={href}
+      className="card p-4 sm:p-5 w-full max-w-full overflow-hidden min-w-0 group hover:border-slate-700 hover:bg-slate-800/30 transition-all focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 focus:ring-offset-slate-900"
+      aria-label={ariaLabel}
+      role="link"
+    >
+      <div className="flex items-center gap-3 sm:gap-4">
+        <div className={`h-10 w-10 sm:h-12 sm:w-12 rounded-xl ${iconBg} flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform`}>
+          <Icon className={`h-5 w-5 sm:h-6 sm:w-6 ${iconColor}`} />
         </div>
-        <div>
-          <p className="text-sm text-slate-400">{title}</p>
-          <p className="text-2xl font-bold">{value}</p>
+        <div className="flex-1 min-w-0">
+          <p className="text-xs sm:text-sm text-slate-400 truncate">{title}</p>
+          <p className="text-xl sm:text-2xl font-bold">{value}</p>
         </div>
+        <ChevronRightIcon className="h-5 w-5 text-slate-500 group-hover:text-cyan-400 transition-colors shrink-0" />
       </div>
-      <p className={`text-xs mt-3 ${changeColors[changeType]}`}>{change}</p>
+      <p className={`text-xs mt-2 sm:mt-3 truncate ${deltaColors[deltaType]}`}>{delta}</p>
+    </Link>
+  );
+}
+
+/**
+ * Section Header - Title with optional "View all" link
+ * Per PRD: Each section must have a visible "View all" link
+ */
+function SectionHeader({
+  title,
+  viewAllHref,
+  viewAllLabel,
+}: {
+  title: string;
+  viewAllHref?: string;
+  viewAllLabel?: string;
+}) {
+  return (
+    <div className="card-header flex items-center justify-between">
+      <h2 className="font-semibold">{title}</h2>
+      {viewAllHref && (
+        <Link
+          href={viewAllHref}
+          className="text-sm text-cyan-400 hover:text-cyan-300 transition-colors focus:outline-none focus:underline min-h-[44px] min-w-[44px] flex items-center justify-end"
+          aria-label={viewAllLabel || `View all ${title}`}
+        >
+          View all
+        </Link>
+      )}
     </div>
   );
 }
 
+/**
+ * Quick Action - Button-style link for common actions
+ * Per PRD: Tap targets must be >= 44x44px
+ */
 function QuickAction({
   href,
   icon: Icon,
@@ -153,15 +234,26 @@ function QuickAction({
   return (
     <Link
       href={href}
-      className="flex items-center gap-3 px-4 py-3 rounded-lg border border-slate-800 hover:border-slate-700 hover:bg-slate-800/50 transition-colors min-h-[44px] focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 focus:ring-offset-slate-900"
+      className="flex flex-col items-center justify-center gap-2 p-4 rounded-lg border border-slate-800 hover:border-slate-700 hover:bg-slate-800/50 transition-colors min-h-[80px] focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 focus:ring-offset-slate-900"
     >
-      <Icon className="h-5 w-5 text-slate-400" />
-      <span className="text-sm font-medium">{children}</span>
+      <Icon className="h-6 w-6 text-slate-400" />
+      <span className="text-xs sm:text-sm font-medium text-center">{children}</span>
     </Link>
   );
 }
 
+// ============================================================================
 // Icons
+// ============================================================================
+
+function OverdueIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  );
+}
+
 function TaskIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -181,15 +273,7 @@ function AIIcon({ className }: { className?: string }) {
 function MeetingIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-    </svg>
-  );
-}
-
-function UsersIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
     </svg>
   );
 }
@@ -226,10 +310,21 @@ function UserPlusIcon({ className }: { className?: string }) {
   );
 }
 
-// Mock data
-const aiActions = [
+function ChevronRightIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+    </svg>
+  );
+}
+
+// ============================================================================
+// Mock Data - Replace with API data in production
+// ============================================================================
+
+const recentAIActions = [
   {
-    id: "1",
+    id: "ai-1",
     title: "Daily Plan Generated",
     description: "TaskFlow • 5 tasks prioritized for today",
     status: "Needs Review",
@@ -239,7 +334,7 @@ const aiActions = [
     statusColor: "text-amber-400",
   },
   {
-    id: "2",
+    id: "ai-2",
     title: "Meeting Summary Created",
     description: "MeetingFlow • Project kickoff meeting",
     status: "Approved",
@@ -249,7 +344,7 @@ const aiActions = [
     statusColor: "text-emerald-400",
   },
   {
-    id: "3",
+    id: "ai-3",
     title: "Follow-up Email Drafted",
     description: "CloserFlow • Lead: Acme Construction",
     status: "Needs Review",
@@ -260,3 +355,32 @@ const aiActions = [
   },
 ];
 
+const recentTasks = [
+  {
+    id: "task-1",
+    title: "Review material samples",
+    dueTime: "Due at 10:00 AM",
+    status: "In Progress",
+    badgeClass: "badge-primary",
+    statusBg: "bg-cyan-500/10",
+    statusColor: "text-cyan-400",
+  },
+  {
+    id: "task-2",
+    title: "Update project timeline",
+    dueTime: "Due at 2:00 PM",
+    status: "Todo",
+    badgeClass: "badge-secondary",
+    statusBg: "bg-slate-500/10",
+    statusColor: "text-slate-400",
+  },
+  {
+    id: "task-3",
+    title: "Call subcontractor for quote",
+    dueTime: "Due at 4:00 PM",
+    status: "Todo",
+    badgeClass: "badge-secondary",
+    statusBg: "bg-slate-500/10",
+    statusColor: "text-slate-400",
+  },
+];
