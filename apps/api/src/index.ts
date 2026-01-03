@@ -18,6 +18,7 @@ import { taskflowRoutes } from "./routes/taskflow";
 import { meetings } from "./routes/meetings";
 import { internalEvents } from "./routes/internal/events";
 import { docs } from "./routes/docs";
+import { home } from "./routes/home";
 import { registerOpenApiPaths } from "./lib/openapi-paths";
 
 const app = new Hono();
@@ -110,6 +111,10 @@ app.route("/internal", internalEvents);
 
 // API Documentation routes
 app.route("/docs", docs);
+
+// Home routes (module selector summary)
+app.route("/v1/home", home);
+app.route("/home", home); // Fallback for backwards compatibility
 
 // Register OpenAPI paths (must be after routes are defined)
 registerOpenApiPaths();
