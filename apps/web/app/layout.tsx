@@ -5,11 +5,7 @@ export const metadata: Metadata = {
   title: "BuildFlow Pro",
   description: "AI-powered construction management platform",
   icons: {
-    icon: [
-      { url: '/favicon.png', type: 'image/png' },
-      { url: '/favicon.svg', type: 'image/svg+xml' },
-    ],
-    apple: [{ url: '/apple-touch-icon.png' }],
+    icon: { url: '/favicon.svg', type: 'image/svg+xml' },
   },
 };
 
