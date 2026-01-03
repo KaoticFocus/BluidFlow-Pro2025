@@ -19,6 +19,8 @@ import { meetings } from "./routes/meetings";
 import { internalEvents } from "./routes/internal/events";
 import { docs } from "./routes/docs";
 import { home } from "./routes/home";
+import scheduleflowRouter from "./routes/scheduleflow";
+import timeclockRouter from "./routes/timeclockflow";
 import { registerOpenApiPaths } from "./lib/openapi-paths";
 
 const app = new Hono();
@@ -115,6 +117,12 @@ app.route("/docs", docs);
 // Home routes (module selector summary)
 app.route("/v1/home", home);
 app.route("/home", home); // Fallback for backwards compatibility
+
+// ScheduleFlow routes (feature-flagged)
+app.route("/v1/schedules", scheduleflowRouter);
+
+// TimeClockFlow routes (feature-flagged)
+app.route("/v1/timeclock", timeclockRouter);
 
 // Register OpenAPI paths (must be after routes are defined)
 registerOpenApiPaths();
