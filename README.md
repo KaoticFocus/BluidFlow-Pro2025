@@ -182,6 +182,25 @@ See `config/env.example` for all required environment variables:
 - `RESEND_API_KEY` - Email sending
 - `TWILIO_*` - SMS notifications
 
+## 📖 Documentation
+
+Comprehensive documentation is available in the `docs/` folder:
+
+| Documentation | Description |
+|---------------|-------------|
+| [📚 Docs Index](./docs/README.md) | Documentation hub and navigation |
+| [📅 ScheduleFlow](./docs/scheduleflow/README.md) | Schedule generation, constraints, notifications |
+| [⏱️ TimeClockFlow](./docs/timeclockflow/README.md) | Time tracking, geofencing, reminders |
+| [📊 Dashboard](./docs/dashboard/README.md) | KPI tiles, drill-down navigation |
+| [📱 Mobile Guidelines](./docs/mobile/mobile-first-guidelines.md) | Mobile-first design patterns |
+
+### Quick Links
+
+- [ScheduleFlow PRD (MVP)](./docs/scheduleflow/prd-mvp.md)
+- [ScheduleFlow Database Schema](./docs/scheduleflow/database-prd.md)
+- [TimeClockFlow Frontend PRD](./docs/timeclockflow/frontend-prd-mvp.md)
+- [TimeClockFlow Twilio Integration](./docs/timeclockflow/reminders-twilio.md)
+
 ## 📚 PRDs
 
 Product Requirements Documents are stored in `.codespring/PRDs/` and synced with CodeSpring. Each module has:
