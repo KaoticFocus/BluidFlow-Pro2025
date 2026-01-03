@@ -1,3 +1,5 @@
+import Link from 'next/link';
+
 export default function DashboardPage() {
   return (
     <div className="p-4 sm:p-6 space-y-8">
@@ -53,9 +55,9 @@ export default function DashboardPage() {
         <div className="lg:col-span-2 card w-full max-w-full overflow-hidden min-w-0">
           <div className="card-header flex items-center justify-between">
             <h2 className="font-semibold">Recent AI Actions</h2>
-            <a href="/admin/ai-actions" className="text-sm text-cyan-400 hover:text-cyan-300">
+            <Link href="/admin/ai-actions" className="text-sm text-cyan-400 hover:text-cyan-300">
               View all
-            </a>
+            </Link>
           </div>
           <div className="divide-y divide-slate-800">
             {aiActions.map((action) => (
@@ -149,13 +151,13 @@ function QuickAction({
   children: React.ReactNode;
 }) {
   return (
-    <a
+    <Link
       href={href}
       className="flex items-center gap-3 px-4 py-3 rounded-lg border border-slate-800 hover:border-slate-700 hover:bg-slate-800/50 transition-colors min-h-[44px] focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 focus:ring-offset-slate-900"
     >
       <Icon className="h-5 w-5 text-slate-400" />
       <span className="text-sm font-medium">{children}</span>
-    </a>
+    </Link>
   );
 }
 
