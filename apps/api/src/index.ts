@@ -18,6 +18,8 @@ import { taskflowRoutes } from "./routes/taskflow";
 import { meetings } from "./routes/meetings";
 import { internalEvents } from "./routes/internal/events";
 import { docs } from "./routes/docs";
+import { dashboard } from "./routes/dashboard";
+import { schedule } from "./routes/schedule";
 import { registerOpenApiPaths } from "./lib/openapi-paths";
 
 const app = new Hono();
@@ -110,6 +112,12 @@ app.route("/internal", internalEvents);
 
 // API Documentation routes
 app.route("/docs", docs);
+
+// Dashboard routes (KPI summary)
+app.route("/dashboard", dashboard);
+
+// Schedule routes (ScheduleFlow)
+app.route("/schedule", schedule);
 
 // Register OpenAPI paths (must be after routes are defined)
 registerOpenApiPaths();

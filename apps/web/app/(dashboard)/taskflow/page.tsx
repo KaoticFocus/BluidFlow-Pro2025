@@ -1,17 +1,73 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 
-type TaskStatus = "all" | "open" | "in_progress" | "completed";
+type TaskStatus = "all" | "open" | "in_progress" | "completed" | "overdue";
 type TaskSource = "" | "voice" | "photo" | "message" | "manual";
 type TaskPriority = "" | "urgent" | "high" | "normal" | "low";
+type DueFilter = "" | "today" | "week" | "overdue";
 
+/**
+ * TaskFlow Page
+ * 
+ * Supports URL query params for deep-linking:
+ * - status: 'open' | 'in_progress' | 'completed' | 'overdue'
+ * - due: 'today' | 'week' | 'overdue'
+ * - assigneeId: string
+ * - q: string (search query)
+ * - page: number
+ * 
+ * Examples:
+ * - /taskflow?status=overdue
+ * - /taskflow?due=today
+ * - /taskflow?status=in_progress&assigneeId=user_123
+ */
 export default function TaskFlowPage() {
-  const [statusFilter, setStatusFilter] = useState<TaskStatus>("all");
+  const searchParams = useSearchParams();
+  const router = useRouter();
+
+  // Read initial filter values from URL query params
+  const urlStatus = searchParams.get("status") as TaskStatus | null;
+  const urlDue = searchParams.get("due") as DueFilter | null;
+  const urlAssignee = searchParams.get("assigneeId");
+  const urlSearch = searchParams.get("q");
+  const urlPage = searchParams.get("page");
+
+  // Map URL params to filter state
+  const getInitialStatus = (): TaskStatus => {
+    if (urlStatus === "overdue") return "overdue";
+    if (urlStatus === "open") return "open";
+    if (urlStatus === "in_progress") return "in_progress";
+    if (urlStatus === "completed") return "completed";
+    if (urlDue === "overdue") return "overdue"; // due=overdue also maps to status
+    return "all";
+  };
+
+  const [statusFilter, setStatusFilter] = useState<TaskStatus>(getInitialStatus());
+  const [dueFilter, setDueFilter] = useState<DueFilter>(urlDue || "");
   const [sourceFilter, setSourceFilter] = useState<TaskSource>("");
   const [priorityFilter, setPriorityFilter] = useState<TaskPriority>("");
+  const [searchQuery, setSearchQuery] = useState(urlSearch || "");
   const [tasks, setTasks] = useState(mockTasks);
+  const [currentPage] = useState(urlPage ? parseInt(urlPage) : 1);
+
+  // Update filters when URL changes
+  useEffect(() => {
+    const status = searchParams.get("status") as TaskStatus | null;
+    const due = searchParams.get("due") as DueFilter | null;
+    
+    if (status === "overdue" || due === "overdue") {
+      setStatusFilter("overdue");
+    } else if (status) {
+      setStatusFilter(status);
+    }
+    
+    if (due && due !== "overdue") {
+      setDueFilter(due);
+    }
+  }, [searchParams]);
 
   const toggleTaskStatus = (taskId: string) => {
     setTasks((prevTasks) =>
@@ -35,9 +91,21 @@ export default function TaskFlowPage() {
 
   const filteredTasks = useMemo(() => {
     return tasks.filter((task) => {
-      // Status filter
-      if (statusFilter !== "all" && task.status !== statusFilter) {
+      // Status filter - handle "overdue" as a special case
+      if (statusFilter === "overdue") {
+        // Mock overdue check - in production, compare with current date
+        if (task.priority !== "urgent" && task.status !== "open") {
+          return false;
+        }
+      } else if (statusFilter !== "all" && task.status !== statusFilter) {
         return false;
+      }
+      // Due filter
+      if (dueFilter === "today") {
+        // Mock "today" filter - in production, compare dueDate with today
+        if (!task.dueDate?.includes("Dec 29") && !task.dueDate?.includes("Dec 30")) {
+          return false;
+        }
       }
       // Source filter
       if (sourceFilter && task.source !== sourceFilter) {
@@ -47,9 +115,13 @@ export default function TaskFlowPage() {
       if (priorityFilter && task.priority !== priorityFilter) {
         return false;
       }
+      // Search filter
+      if (searchQuery && !task.title.toLowerCase().includes(searchQuery.toLowerCase())) {
+        return false;
+      }
       return true;
     });
-  }, [statusFilter, sourceFilter, priorityFilter, tasks]);
+  }, [statusFilter, dueFilter, sourceFilter, priorityFilter, searchQuery, tasks]);
 
   return (
     <div className="p-4 sm:p-6 space-y-6">
@@ -90,6 +162,28 @@ export default function TaskFlowPage() {
         </div>
       </div>
 
+      {/* Active URL Filters Display */}
+      {(urlStatus || urlDue || urlAssignee) && (
+        <div className="flex items-center gap-2 p-3 bg-slate-800/50 rounded-lg border border-slate-700">
+          <span className="text-sm text-slate-400">Active filters:</span>
+          {urlStatus && (
+            <span className="badge badge-info">{urlStatus}</span>
+          )}
+          {urlDue && (
+            <span className="badge badge-info">Due: {urlDue}</span>
+          )}
+          {urlAssignee && (
+            <span className="badge badge-info">Assignee: {urlAssignee}</span>
+          )}
+          <button
+            onClick={() => router.push('/taskflow')}
+            className="text-xs text-cyan-400 hover:text-cyan-300 ml-2"
+          >
+            Clear all
+          </button>
+        </div>
+      )}
+
       {/* Filters */}
       <div className="flex items-center gap-3 flex-wrap">
         <div className="flex items-center gap-2 border border-slate-700 rounded-lg p-1">
@@ -98,6 +192,12 @@ export default function TaskFlowPage() {
             onClick={() => setStatusFilter("all")}
           >
             All Tasks
+          </FilterButton>
+          <FilterButton 
+            active={statusFilter === "overdue"} 
+            onClick={() => setStatusFilter("overdue")}
+          >
+            Overdue
           </FilterButton>
           <FilterButton 
             active={statusFilter === "open"} 

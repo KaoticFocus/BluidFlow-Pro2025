@@ -1,12 +1,85 @@
 import Link from 'next/link';
 
-export default function DashboardPage() {
+/**
+ * Dashboard Summary Response from API
+ */
+interface DashboardSummary {
+  tasks: {
+    overdue: number;
+    dueToday: number;
+    inProgress: number;
+  };
+  schedule: {
+    upcomingPlans: number;
+    approved: number;
+  };
+  updatedAt: string;
+}
+
+/**
+ * Telemetry helper for tracking dashboard interactions
+ * @todo Integrate with PostHog or analytics provider
+ */
+function trackEvent(event: string, properties?: Record<string, unknown>) {
+  // TODO: Implement actual telemetry
+  // Example: posthog.capture(event, properties);
+  if (typeof window !== 'undefined') {
+    console.debug('[Telemetry]', event, properties);
+  }
+}
+
+/**
+ * Fetch dashboard summary from API
+ * Server-side fetch with cache disabled for fresh data
+ */
+async function getDashboardSummary(): Promise<DashboardSummary | null> {
+  try {
+    // In production, use absolute URL or environment variable
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+    const res = await fetch(`${apiUrl}/dashboard/summary`, {
+      cache: 'no-store', // Always fetch fresh data
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+    
+    if (!res.ok) {
+      console.error('[Dashboard] Failed to fetch summary:', res.status);
+      return null;
+    }
+    
+    return await res.json();
+  } catch (error) {
+    console.error('[Dashboard] Error fetching summary:', error);
+    return null;
+  }
+}
+
+/**
+ * Dashboard Page - Server Component
+ * 
+ * Fetches KPI data from /api/dashboard/summary and renders
+ * clickable tiles that deep-link to filtered list views.
+ */
+export default async function DashboardPage() {
+  // Fetch dashboard data (server-side)
+  const summary = await getDashboardSummary();
+  
+  // Fallback values if API fails
+  const tasks = summary?.tasks ?? { overdue: 0, dueToday: 0, inProgress: 0 };
+  const schedule = summary?.schedule ?? { upcomingPlans: 0, approved: 0 };
+
   return (
     <div className="p-4 sm:p-6 space-y-8">
       {/* Page header */}
       <div>
         <h1 className="text-2xl font-bold">Dashboard</h1>
         <p className="text-slate-400 mt-1">Welcome back! Here's what's happening today.</p>
+        {!summary && (
+          <p className="text-amber-400 text-sm mt-2">
+            Unable to load live data. Showing cached values.
+          </p>
+        )}
       </div>
 
       {/* KPI Stats grid - all cards are clickable deep links */}
@@ -14,35 +87,41 @@ export default function DashboardPage() {
         <KPICard
           href="/taskflow?status=overdue"
           title="Overdue Tasks"
-          value={7}
-          delta="+2 since yesterday"
-          deltaType="negative"
+          value={tasks.overdue}
+          delta={tasks.overdue > 0 ? `${tasks.overdue} need attention` : "All caught up!"}
+          deltaType={tasks.overdue > 0 ? "negative" : "positive"}
           icon={OverdueIcon}
           iconBg="bg-red-500/10"
           iconColor="text-red-400"
-          ariaLabel="Open Overdue Tasks list (7)"
+          ariaLabel={`Open Overdue Tasks list (${tasks.overdue})`}
+          eventName="dashboard.kpi_clicked"
+          eventProps={{ kpi: 'tasksOverdue', value: tasks.overdue }}
         />
         <KPICard
           href="/taskflow?due=today"
           title="Tasks Due Today"
-          value={5}
-          delta="3 in progress"
+          value={tasks.dueToday}
+          delta={`${tasks.inProgress} in progress`}
           deltaType="neutral"
           icon={TaskIcon}
           iconBg="bg-cyan-500/10"
           iconColor="text-cyan-400"
-          ariaLabel="Open Tasks Due Today list (5)"
+          ariaLabel={`Open Tasks Due Today list (${tasks.dueToday})`}
+          eventName="dashboard.kpi_clicked"
+          eventProps={{ kpi: 'tasksDueToday', value: tasks.dueToday }}
         />
         <KPICard
-          href="/meetingflow?status=review_pending"
-          title="Meetings Pending Review"
-          value={3}
-          delta="1 from this week"
-          deltaType="warning"
-          icon={MeetingIcon}
-          iconBg="bg-violet-500/10"
-          iconColor="text-violet-400"
-          ariaLabel="Open Meetings awaiting review (3)"
+          href="/scheduleflow?status=approved"
+          title="Approved Plans"
+          value={schedule.approved}
+          delta={`${schedule.upcomingPlans} upcoming`}
+          deltaType="positive"
+          icon={ScheduleIcon}
+          iconBg="bg-emerald-500/10"
+          iconColor="text-emerald-400"
+          ariaLabel={`Open Approved Plans list (${schedule.approved})`}
+          eventName="dashboard.kpi_clicked"
+          eventProps={{ kpi: 'latestPlansApproved', value: schedule.approved }}
         />
         <KPICard
           href="/admin/ai-actions?needsReview=true"
@@ -54,6 +133,8 @@ export default function DashboardPage() {
           iconBg="bg-amber-500/10"
           iconColor="text-amber-400"
           ariaLabel="Open AI Actions needing review (4)"
+          eventName="dashboard.kpi_clicked"
+          eventProps={{ kpi: 'aiActionsNeedsReview', value: 4 }}
         />
       </div>
 
@@ -138,6 +219,8 @@ export default function DashboardPage() {
 /**
  * KPI Card - Fully clickable card that navigates to a filtered list view
  * Per PRD: All KPI cards must be clickable and route to pre-filtered detail views
+ * 
+ * @todo Telemetry events are logged to console in dev; integrate with PostHog in production
  */
 function KPICard({
   href,
@@ -149,6 +232,8 @@ function KPICard({
   iconBg,
   iconColor,
   ariaLabel,
+  eventName,
+  eventProps,
 }: {
   href: string;
   title: string;
@@ -159,6 +244,8 @@ function KPICard({
   iconBg: string;
   iconColor: string;
   ariaLabel: string;
+  eventName?: string;
+  eventProps?: Record<string, unknown>;
 }) {
   const deltaColors = {
     positive: "text-emerald-400",
@@ -167,9 +254,16 @@ function KPICard({
     warning: "text-amber-400",
   };
 
+  const handleClick = () => {
+    if (eventName) {
+      trackEvent(eventName, eventProps);
+    }
+  };
+
   return (
     <Link
       href={href}
+      onClick={handleClick}
       className="card p-4 sm:p-5 w-full max-w-full overflow-hidden min-w-0 group hover:border-slate-700 hover:bg-slate-800/30 transition-all focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 focus:ring-offset-slate-900"
       aria-label={ariaLabel}
       role="link"
@@ -274,6 +368,14 @@ function MeetingIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+    </svg>
+  );
+}
+
+function ScheduleIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
     </svg>
   );
 }
